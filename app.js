@@ -1231,18 +1231,6 @@ async function playFlow(battleId) {
   }
 }
 
-function salseoCard(stats) {
-  const n = stats?.open_battles || 0;
-  return `
-    <div class="card salseo">
-      <span class="big">${n ? '⚔️' : '🕊️'}</span>
-      <span class="grow">
-        <strong>${n === 0 ? 'No hay batallas por jugar' : n === 1 ? 'Hay 1 batalla por jugar' : `Hay ${n} batallas por jugar`}</strong>
-        <span class="hint">${n ? `${stats.fighters} en liza · ` : 'Paz en el grupo… de momento · '}${stats?.resolved_total || 0} resueltas</span>
-      </span>
-    </div>`;
-}
-
 function battleBoard(bt) {
   if (!bt.board) return '';
   return `<div class="board">${bt.board.map((r, i) => `<span class="pill ${r.me ? 'me' : ''}">${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${r.best ?? '—'}${r.me ? ' (tú)' : ''}</span>`).join('')}</div>`;
@@ -1292,15 +1280,6 @@ function renderPool() {
   $app.innerHTML = `
     ${topbar('Mi pool')}
     <main>
-      ${salseoCard(B.stats)}
-      <div class="card practice">
-        <strong>🎮 Entrena los minijuegos</strong>
-        <p class="hint">Practica sin que cuente nada. Gira la ruleta o elige juego.</p>
-        <div class="practice-games">
-          ${Object.entries(GAMES).map(([k, g]) => `<button class="practice-game" data-practice="${k}"><span>${g.emoji}</span>${esc(g.name)}${practiceBest(k) !== null ? `<small>Récord: ${practiceBest(k)}</small>` : ''}</button>`).join('')}
-        </div>
-        <button class="btn primary block" data-practice-spin>🎰 Girar la ruleta</button>
-      </div>
       ${open.length ? `<div class="section-title">Mis batallas</div><div class="stack-gap">${open.map(battleCard).join('')}</div>` : ''}
       <div class="section-title"><span class="grow">Mi pool privado · ${state.pool.length}</span><span class="chip">solo lo ves tú</span></div>
       <div class="card">
@@ -1330,6 +1309,15 @@ function renderPool() {
             </div>`).join('')}
           <p class="hint">Úsalo solo si una batalla se queda atascada. «Resolver ya» decide con lo jugado hasta ahora.</p>
         </div>` : ''}
+      <div class="section-title">🎮 Minijuegos</div>
+      <div class="card practice">
+        <p class="practice-why">Sirven para decidir quién se queda un sitio cuando lo queréis dos o más. Aparecen al añadir a tu pool un sitio que otro ya tiene: se abre una <b>batalla</b> ⚔️ y la ruleta elige el juego. Cada uno tiene 3 intentos y quien más puntos saque se lo queda; los demás lo pierden.</p>
+        <p class="practice-note">Aquí puedes probarlos <b>solo para practicar</b>: no cuenta para nada.</p>
+        <div class="practice-games">
+          ${Object.entries(GAMES).map(([k, g]) => `<button class="practice-game" data-practice="${k}"><span>${g.emoji}</span>${esc(g.name)}${practiceBest(k) !== null ? `<small>Récord: ${practiceBest(k)}</small>` : ''}</button>`).join('')}
+        </div>
+        <button class="btn primary block" data-practice-spin>🎰 Girar la ruleta</button>
+      </div>
     </main>
     ${tabbar('pool')}`;
   bindCommon();

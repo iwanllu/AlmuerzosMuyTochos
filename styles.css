@@ -390,10 +390,9 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
   display: grid; place-items: center; line-height: 1;
 }
 .alert-card { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); background: var(--accent-soft); margin-bottom: 12px; }
-.alert-card .big, .salseo .big { font-size: 32px; line-height: 1; }
-.alert-card .grow, .salseo .grow { flex: 1; display: grid; min-width: 0; }
+.alert-card .big { font-size: 32px; line-height: 1; }
+.alert-card .grow { flex: 1; display: grid; min-width: 0; }
 .alert-card .go { color: var(--accent); font-weight: 800; font-size: 20px; }
-.salseo { display: flex; align-items: center; gap: 12px; }
 .salseo-line {
   display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 12px 14px; border-radius: 14px;
   background: var(--surface-2); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px;
@@ -596,3 +595,8 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .hero-car .carousel.multi .car-slide, .picker .carousel.multi .car-slide { flex-basis: 86%; }
 .hero-car .carousel.multi .car-slide:last-child, .picker .carousel.multi .car-slide:last-child { flex-basis: 100%; }
 .hero-car .car-dots, .picker .car-dots { right: 28px; }
+
+/* Minijuegos (al final de Mi pool) */
+.practice .practice-why { margin: 0 0 8px; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.practice .practice-why b, .practice .practice-note b { color: var(--text); }
+.practice .practice-note { margin: 0 0 12px; font-size: 14px; line-height: 1.4; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); color: var(--muted); }
