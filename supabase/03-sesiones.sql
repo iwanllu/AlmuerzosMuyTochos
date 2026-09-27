@@ -1,6 +1,6 @@
 -- =====================================================================
--- Almuerzos Muy Tochos · 02 · sesiones, propuestas, votación y puntuación
--- Requiere 01-base.sql. Idempotente: se puede volver a ejecutar.
+-- Almuerzos Muy Tochos · 03 · sesiones, propuestas, votación y puntuación
+-- Requiere 01-base.sql y 02-avisos.sql. Idempotente: se puede volver a ejecutar.
 --
 -- Secreto garantizado por el servidor:
 --   · Nadie (ni leyendo la API) puede ver quién propuso cada sitio,
@@ -179,6 +179,8 @@ begin
     end if;
     update public.sessions set phase = 'voting', phase_changed_at = now(), version = version + 1
     where id = p_session;
+    perform public._notify_all('🗳️ ¡A votar!', format('Sesión %s: ya están las propuestas. Elige dónde almorzamos.', s.number),
+                               format('#/s/%s', p_session), 'session');
     return 'voting';
 
   elsif s.phase = 'voting' then
@@ -200,6 +202,8 @@ begin
       phase = 'rating', winner_proposal_id = w.id, winner_name = w.name,
       winner_by_draw = coalesce(w.tied, 0) > 1, phase_changed_at = now(), version = version + 1
     where id = p_session;
+    perform public._notify_all(format('🏆 Ganador: %s', w.name), format('Sesión %s: ya sabemos dónde se almuerza.', s.number),
+                               format('#/s/%s', p_session), 'session');
     return 'rating';
 
   elsif s.phase = 'rating' then
@@ -222,6 +226,8 @@ begin
       host_id = (select user_id from public.proposals where id = s.winner_proposal_id),
       phase_changed_at = now(), version = version + 1
     where id = p_session;
+    perform public._notify_all('🎉 Revelación', format('Descubre quién propuso %s.', s.winner_name),
+                               format('#/s/%s', p_session), 'session');
     return 'closed';
   end if;
 
@@ -321,6 +327,9 @@ begin
   values ((select coalesce(max(number), 0) + 1 from public.sessions), p_date, p_time,
           nullif(btrim(coalesce(p_note, '')), ''))
   returning id into new_id;
+  perform public._notify_all(format('🍽️ Sesión %s', (select number from public.sessions where id = new_id)),
+                             format('Almuerzo el %s. ¡Propón tu sitio desde tu pool!', to_char(p_date, 'DD/MM')),
+                             format('#/s/%s', new_id), 'session');
   return new_id;
 end $$;
 
@@ -496,18 +505,34 @@ begin
   );
 end $$;
 
+-- Aviso a todos al revelar la gran final
+create or replace function public._league_notify()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if new.final_revealed and not old.final_revealed then
+    perform public._notify_all('🎉 ¡Gran final!', 'Ya se sabe quién gana la cena. Entra a verlo.', '#/clasificacion', 'final');
+  end if;
+  return new;
+end $$;
+drop trigger if exists league_notify on public.league;
+create trigger league_notify after update on public.league for each row execute function public._league_notify();
+revoke execute on function public._league_notify() from public, anon, authenticated;
+
 -- ---------- PERMISOS DE FUNCIONES ----------
 revoke execute on function public._members_count(), public._refresh_session(bigint), public._advance(bigint),
                            public._auto_advance(bigint), public._final_board()
   from public, anon, authenticated;
 
+-- propose() queda interna: se propone desde el pool privado con propose_place() (04-batallas.sql)
+revoke execute on function public.propose(bigint, text, text) from public, anon, authenticated;
+
 revoke execute on function public.create_session(date, time, text), public.advance_session(bigint),
-                           public.propose(bigint, text, text), public.withdraw_proposal(bigint),
+                           public.withdraw_proposal(bigint),
                            public.cast_vote(bigint, bigint), public.rate_session(bigint, jsonb),
                            public.get_session(bigint), public.get_league()
   from public, anon;
 grant execute on function public.create_session(date, time, text), public.advance_session(bigint),
-                          public.propose(bigint, text, text), public.withdraw_proposal(bigint),
+                          public.withdraw_proposal(bigint),
                           public.cast_vote(bigint, bigint), public.rate_session(bigint, jsonb),
                           public.get_session(bigint), public.get_league()
   to authenticated;
