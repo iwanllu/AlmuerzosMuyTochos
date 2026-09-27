@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=3';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
@@ -20,7 +21,10 @@ const state = {
   moves: new Map(),       // id sesión → { idPropuesta: {dir, until} }
   loaded: false,
   channel: null,
-  drafts: { proposal: {}, rating: {}, newSession: null },
+  pool: [],               // mi pool privado (my_pool)
+  battles: null,          // mis batallas + contador del grupo (my_battles)
+  pushOn: false,
+  drafts: { proposal: {}, rating: {}, newSession: null, pool: { name: '', note: '' } },
 };
 
 const PHASES = [
@@ -43,6 +47,8 @@ const ICON = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  pool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.3"/><circle cx="4.5" cy="12" r="1.3"/><circle cx="4.5" cy="18" r="1.3"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   trophy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></svg>',
 };
 
@@ -128,13 +134,18 @@ const activeSession = () => state.sessions.find((s) => s.phase !== 'closed');
 const isAdmin = () => !!state.me?.is_admin;
 
 async function loadAll() {
-  const [pr, se, lg] = await Promise.all([
+  const [pr, se, lg, po, bt] = await Promise.all([
     sb.from('profiles').select('id, username, display_name, avatar_url, is_admin'),
     sb.from('sessions').select(SESSION_COLS).order('number', { ascending: false }),
     sb.rpc('get_league'),
+    sb.rpc('my_pool'),
+    sb.rpc('my_battles'),
   ]);
-  const err = pr.error || se.error || lg.error;
+  const err = pr.error || se.error || lg.error || po.error || bt.error;
   if (err) throw err;
+  state.pool = po.data || [];
+  detectBattleEvents(state.battles, bt.data);
+  state.battles = bt.data;
   state.profiles = new Map(pr.data.map((p) => [p.id, p]));
   state.me = state.profiles.get(state.session.user.id) || null;
   state.sessions = se.data;
@@ -148,6 +159,7 @@ async function loadAll() {
   for (const id of state.boards.keys()) if (!state.sessions.some((s) => s.id === id)) state.boards.delete(id);
   await Promise.all([...ids].filter((id) => state.sessions.some((s) => s.id === id)).map(loadBoard));
   state.loaded = true;
+  updateAppBadge();
 }
 
 async function loadBoard(id) {
@@ -191,7 +203,7 @@ async function ensureBoard(id) {
 function subscribe() {
   if (state.channel) return;
   state.channel = sb.channel('almuerzos-live');
-  for (const table of ['sessions', 'league', 'profiles', 'rating_categories']) {
+  for (const table of ['sessions', 'league', 'profiles', 'rating_categories', 'battle_stats']) {
     state.channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => scheduleReload());
   }
   state.channel.subscribe();
@@ -208,18 +220,20 @@ async function call(fn, args, okMsg) {
   const { data, error } = await sb.rpc(fn, args);
   if (error) { toast(friendlyError(error), true); return { ok: false }; }
   if (okMsg) toast(okMsg);
+  flushPush();
   await loadAll().catch(() => {});
   render();
   return { ok: true, data };
 }
 
 // ---------------------------------------------------------------------------
-// Router: #/  #/s/12  #/clasificacion  #/perfil  #/nueva
+// Router: #/  #/s/12  #/pool  #/clasificacion  #/perfil  #/nueva
 // ---------------------------------------------------------------------------
 function route() {
   const [name, id] = location.hash.replace(/^#\/?/, '').split('/');
   if (name === 's' && id) return { name: 'session', id: Number(id) };
   if (name === 'clasificacion') return { name: 'ranking' };
+  if (name === 'pool') return { name: 'pool' };
   if (name === 'perfil') return { name: 'profile' };
   if (name === 'nueva') return { name: 'new' };
   return { name: 'home' };
@@ -235,10 +249,11 @@ function topbar(title, back = false) {
     </header>`;
 }
 function tabbar(active) {
-  const t = (key, href, icon, label) => `<a href="${href}" class="${active === key ? 'active' : ''}" ${active === key ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`;
+  const t = (key, href, icon, label, badge = 0) => `<a href="${href}" class="${active === key ? 'active' : ''}" ${active === key ? 'aria-current="page"' : ''}>${icon}<span>${label}</span>${badge ? `<span class="tab-badge" aria-label="${badge} pendientes">${badge}</span>` : ''}</a>`;
   return `
     <nav class="tabbar" aria-label="Secciones"><div class="tabs">
       ${t('home', '#/', ICON.home, 'Inicio')}
+      ${t('pool', '#/pool', ICON.pool, 'Mi pool', myBattleActions())}
       ${t('ranking', '#/clasificacion', ICON.trophy, 'Clasificación')}
       ${t('profile', '#/perfil', `<span class="tab-avatar">${avatar(state.me)}</span>`, 'Perfil')}
     </div></nav>`;
@@ -281,6 +296,7 @@ function render() {
   const r = route();
   if (r.name === 'session') renderSession(r.id);
   else if (r.name === 'ranking') renderRanking();
+  else if (r.name === 'pool') renderPool();
   else if (r.name === 'profile') renderProfile();
   else if (r.name === 'new' && isAdmin()) renderNew();
   else renderHome();
@@ -412,10 +428,15 @@ function renderHome() {
       </div>`;
   }
 
+  const actions = myBattleActions();
+  const openB = state.battles?.stats?.open_battles || 0;
   $app.innerHTML = `
     ${topbar('Almuerzos <span>Muy Tochos</span>')}
     <main>
+      ${actions ? `<a class="card alert-card" href="#/pool"><span class="big">⚔️</span><span class="grow"><strong>${actions === 1 ? 'Tienes 1 batalla esperándote' : `Tienes ${actions} batallas esperándote`}</strong><span class="hint">Toca para jugar</span></span><span class="go">→</span></a>` : ''}
+      ${pushCard('home')}
       ${hero}
+      ${openB ? `<a class="salseo-line" href="#/pool">⚔️ <span class="grow">${openB === 1 ? 'Hay 1 batalla por jugar' : `Hay ${openB} batallas por jugar`} en el grupo</span><span class="hint">${state.battles.stats.fighters} en liza</span></a>` : ''}
       ${past.length ? `
         <div class="section-title">Sesiones anteriores</div>
         <div class="past">
@@ -432,6 +453,7 @@ function renderHome() {
     </main>
     ${tabbar('home')}`;
   bindCommon();
+  bindPushCard();
 }
 
 // ---------- Sesión ----------
@@ -475,23 +497,34 @@ function renderSession(id) {
 
 function proposalsView(b) {
   const id = b.session.id;
-  const d = (state.drafts.proposal[id] ||= { name: '', note: '', editing: false });
+  const d = (state.drafts.proposal[id] ||= { placeId: null, editing: false, adding: false, name: '', note: '' });
   const mp = b.my_proposal;
   const showForm = !mp || d.editing;
+  const pool = state.pool;
+  if (d.placeId && !pool.some((p) => p.id === d.placeId && !p.battle_id)) d.placeId = null;
   const form = `
     <form class="card" id="prop-form" novalidate>
-      <div class="field">
-        <label for="prop-name">${mp ? 'Cambiar mi propuesta' : 'Tu propuesta'}</label>
-        <input class="input" id="prop-name" maxlength="80" placeholder="Nombre del bar o restaurante" value="${esc(d.name)}" autocomplete="off">
-      </div>
-      <div class="field">
-        <label for="prop-note">Comentario <span class="hint">(opcional)</span></label>
-        <textarea class="input" id="prop-note" maxlength="200" placeholder="Dónde está, enlace de Maps, por qué mola…">${esc(d.note)}</textarea>
+      <span class="field-label">${mp ? 'Cambia tu propuesta' : 'Elige tu propuesta de tu pool'}</span>
+      ${pool.length ? `<div class="pick-list" role="radiogroup" aria-label="Sitios de tu pool">
+        ${pool.map((p) => `
+          <label class="pick ${p.battle_id ? 'disabled' : ''} ${d.placeId === p.id ? 'on' : ''}">
+            <input type="radio" name="place" value="${p.id}" ${d.placeId === p.id ? 'checked' : ''} ${p.battle_id ? 'disabled' : ''}>
+            <span class="body"><span class="name">${esc(p.name)}</span>${p.note ? `<span class="note">${esc(p.note)}</span>` : ''}</span>
+            ${p.battle_id ? '<span class="chip accent">⚔️ en batalla</span>' : ''}
+          </label>`).join('')}
+      </div>` : '<p class="hint">Tu pool está vacío: añade un sitio para poder proponerlo.</p>'}
+      <div class="add-inline">
+        ${d.adding ? `
+          <div class="field"><input class="input" id="add-name" maxlength="80" placeholder="Nombre del bar o restaurante" value="${esc(d.name)}" autocomplete="off"></div>
+          <div class="field"><input class="input" id="add-note" maxlength="200" placeholder="Comentario o enlace de Maps (opcional)" value="${esc(d.note)}" autocomplete="off"></div>
+          <div class="btn-row"><button type="button" class="btn ghost small" id="add-cancel">Cancelar</button><button type="button" class="btn primary small" id="add-go">Añadir a mi pool</button></div>
+          <p class="hint" style="margin:8px 0 0">⚔️ Si alguien ya lo tiene en su pool, se abrirá una batalla.</p>`
+        : `<button type="button" class="btn ghost small" id="add-open">${ICON.plus} Añadir un sitio nuevo a mi pool</button>`}
       </div>
       <div class="error-text" id="prop-error" role="alert"></div>
       <div class="btn-row">
         ${mp ? '<button type="button" class="btn ghost" id="prop-cancel">Cancelar</button>' : ''}
-        <button class="btn primary" type="submit">${mp ? 'Guardar cambio' : 'Enviar propuesta'}</button>
+        <button class="btn primary" type="submit" ${d.placeId ? '' : 'disabled'}>${mp ? 'Cambiar propuesta' : 'Proponer este sitio'}</button>
       </div>
       <p class="hint" style="margin:12px 0 0">🤫 Es anónima: nadie verá que es tuya. Solo se sabrá si gana, cuando todos hayan puntuado.</p>
     </form>`;
@@ -510,7 +543,7 @@ function proposalsView(b) {
     ${showForm ? form : mine}
     <div class="section-title" style="margin-top:20px"></div>
     ${counter(b)}
-    <div class="section-title"><span class="grow">El pool · ${b.proposals.length} ${b.proposals.length === 1 ? 'sitio' : 'sitios'}</span><span class="chip">anónimo</span></div>
+    <div class="section-title"><span class="grow">Pool general · ${b.proposals.length} ${b.proposals.length === 1 ? 'sitio' : 'sitios'}</span><span class="chip">anónimo</span></div>
     ${b.proposals.length ? `<ul class="pool">
       ${b.proposals.map((p) => `
         <li class="pool-item ${p.mine ? 'mine' : ''}">
@@ -668,28 +701,43 @@ function bindSession(b) {
     const d = state.drafts.proposal[id];
     const f = document.getElementById('prop-form');
     if (f) {
-      const nameEl = f.querySelector('#prop-name');
-      const noteEl = f.querySelector('#prop-note');
-      nameEl.oninput = () => (d.name = nameEl.value);
-      noteEl.oninput = () => (d.note = noteEl.value);
+      f.querySelectorAll('input[name=place]').forEach((r) => (r.onchange = () => { d.placeId = Number(r.value); render(); }));
       const cancel = f.querySelector('#prop-cancel');
       if (cancel) cancel.onclick = () => { d.editing = false; render(); };
+      const open = f.querySelector('#add-open');
+      if (open) open.onclick = () => { d.adding = true; render(); document.getElementById('add-name')?.focus(); };
+      const addName = f.querySelector('#add-name'), addNote = f.querySelector('#add-note');
+      if (addName) {
+        addName.oninput = () => (d.name = addName.value);
+        addNote.oninput = () => (d.note = addNote.value);
+        const doAdd = async () => {
+          if (d.name.trim().length < 2) { document.getElementById('prop-error').textContent = 'Escribe el nombre del sitio'; return; }
+          const res = await addPlace(d.name, d.note);
+          if (!res) return;
+          Object.assign(d, { adding: false, name: '', note: '' });
+          if (res.result === 'added') d.placeId = res.place_id;
+          render();
+        };
+        [addName, addNote].forEach((el) => (el.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } }));
+        f.querySelector('#add-go').onclick = doAdd;
+        f.querySelector('#add-cancel').onclick = () => { Object.assign(d, { adding: false, name: '', note: '' }); render(); };
+      }
       f.onsubmit = async (e) => {
         e.preventDefault();
-        const err = document.getElementById('prop-error');
-        if (d.name.trim().length < 2) { err.textContent = 'Escribe el nombre del sitio'; return; }
+        if (!d.placeId) return;
         const btn = f.querySelector('button[type=submit]');
         btn.disabled = true;
-        const { error } = await sb.rpc('propose', { p_session: id, p_name: d.name, p_note: d.note });
-        if (error) { err.textContent = friendlyError(error); btn.disabled = false; return; }
-        state.drafts.proposal[id] = { name: '', note: '', editing: false };
+        const { error } = await sb.rpc('propose_place', { p_session: id, p_place: d.placeId });
+        if (error) { document.getElementById('prop-error').textContent = friendlyError(error); btn.disabled = false; return; }
+        state.drafts.proposal[id] = { placeId: null, editing: false, adding: false, name: '', note: '' };
         toast(b.my_proposal ? 'Propuesta cambiada 🤫' : 'Propuesta enviada 🤫');
+        flushPush();
         await loadAll().catch(() => {});
         render();
       };
     }
     const edit = document.getElementById('prop-edit');
-    if (edit) edit.onclick = () => { Object.assign(d, { editing: true, name: b.my_proposal.name, note: b.my_proposal.note || '' }); render(); document.getElementById('prop-name')?.focus(); };
+    if (edit) edit.onclick = () => { Object.assign(d, { editing: true, placeId: null }); render(); };
     const wd = document.getElementById('prop-withdraw');
     if (wd) wd.onclick = async () => {
       if (await confirmSheet({ title: '¿Retirar tu propuesta?', text: 'Podrás proponer otro sitio mientras siga abierto el plazo.', okLabel: 'Retirar', danger: true })) {
@@ -955,6 +1003,8 @@ function renderProfile() {
         </div>
         <button class="btn primary block" type="submit">Guardar</button>
       </form>
+      <div class="section-title">Avisos en este dispositivo</div>
+      ${pushSettings()}
       <div class="section-title">El grupo · ${state.profiles.size}</div>
       <div class="card who-list">
         ${members.map((m) => `<div class="who-row">${avatar(m, 'sm')}<span class="name">${esc(m.display_name)}</span><span class="hint">@${esc(m.username)}</span></div>`).join('')}
@@ -963,6 +1013,7 @@ function renderProfile() {
     </main>
     ${tabbar('profile')}`;
   bindCommon();
+  bindPushCard();
 
   const file = document.getElementById('file');
   document.getElementById('photo').onclick = () => file.click();
@@ -1002,7 +1053,9 @@ function renderProfile() {
 
   document.getElementById('logout').onclick = async () => {
     const ok = await confirmSheet({ title: '¿Cerrar sesión?', text: 'Tendrás que volver a escribir tu usuario y contraseña.', okLabel: 'Cerrar sesión' });
-    if (ok) await sb.auth.signOut();
+    if (!ok) return;
+    await disablePush().catch(() => {});
+    await sb.auth.signOut();
   };
 }
 
@@ -1019,6 +1072,415 @@ async function squareJpeg(file, size) {
 }
 
 // ---------------------------------------------------------------------------
+// Pool privado y batallas
+// ---------------------------------------------------------------------------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const battleById = (id) => state.battles?.battles?.find((b) => b.id === id);
+// Batallas en las que me toca hacer algo (girar la ruleta o jugar)
+function myBattleActions() {
+  return (state.battles?.battles || []).filter((b) =>
+    (b.status === 'spin' && b.challenger) || (b.status === 'playing' && !b.finished)).length;
+}
+
+// Avisos dentro de la web cuando cambia algo de mis batallas
+function detectBattleEvents(prev, next) {
+  if (!prev || !next) return;
+  const old = new Map(prev.battles.map((b) => [b.id, b]));
+  for (const b of next.battles) {
+    const o = old.get(b.id);
+    if (!o) {
+      if (b.parent_id && b.status !== 'resolved') toast(`🤝 ¡Empate en «${b.place_name}»! Hay revancha`);
+      else if (!b.challenger && b.status !== 'resolved') toast(`⚔️ ¡Batalla por «${b.place_name}»! Sois ${b.players}`);
+      continue;
+    }
+    if (o.status !== 'resolved' && b.status === 'resolved') {
+      toast(b.result === 'win' ? `🏆 ¡Has ganado «${b.place_name}»!` : b.result === 'rematch' ? `🤝 Empate en «${b.place_name}»: revancha` : `💥 Has perdido «${b.place_name}»`);
+    } else if (o.status === 'spin' && b.status === 'playing' && !b.challenger) {
+      toast(`🎰 Minijuego elegido: ${GAMES[b.game]?.name || b.game}. ¡A jugar!`);
+    } else if (b.players > o.players && b.status !== 'resolved') {
+      toast(`⚔️ Se une otro rival a «${b.place_name}»: sois ${b.players}`);
+    }
+  }
+}
+
+function updateAppBadge() {
+  let n = myBattleActions();
+  const act = activeSession();
+  const b = act && state.boards.get(act.id);
+  if (b && !myStatus(b).done) n++;
+  try {
+    if (!navigator.setAppBadge) return;
+    if (n > 0) navigator.setAppBadge(n).catch(() => {}); else navigator.clearAppBadge().catch(() => {});
+  } catch { /* no disponible */ }
+}
+
+async function addPlace(name, note) {
+  const { data, error } = await sb.rpc('add_to_pool', { p_name: name, p_note: note || null });
+  if (error) { toast(friendlyError(error), true); return null; }
+  flushPush();
+  await loadAll().catch(() => {});
+  render();
+  if (data.result === 'added') toast('Añadido a tu pool');
+  else await battleIntroFlow(data, data.result === 'battle');
+  return data;
+}
+
+async function battleIntroFlow(data, created) {
+  const rivals = data.rivals;
+  const rivTxt = `${rivals} ${rivals === 1 ? 'rival anónimo' : 'rivales anónimos'}`;
+  const choice = await gameScreen(`
+    <div class="big">⚔️</div>
+    <h2>¡Batalla!</h2>
+    <p>${created ? 'Alguien más tiene' : 'Ya había una batalla en marcha por'} <b>«${esc(data.place_name)}»</b>${created ? ' en su pool' : ''}.</p>
+    <p>Te enfrentas a <b>${rivTxt}</b>. Quien gane se queda el sitio; los demás lo pierden.</p>
+    ${created ? '<p class="muted">Como la has provocado tú, te toca girar la ruleta.</p>'
+      : data.status === 'spin' ? '<p class="muted">Falta que quien la provocó gire la ruleta. Te avisaremos.</p>' : ''}`,
+    created ? [{ label: '🎰 Girar la ruleta', value: 'spin', primary: true }, { label: 'Luego', value: 'later' }]
+      : data.status === 'playing' ? [{ label: '▶ Jugar ahora', value: 'play', primary: true }, { label: 'Luego', value: 'later' }]
+        : [{ label: 'Vale', value: 'later', primary: true }]);
+  closeOverlay();
+  if (choice === 'spin') await spinFlow(data.battle_id);
+  else if (choice === 'play') await playFlow(data.battle_id);
+}
+
+async function spinFlow(battleId) {
+  const bt = battleById(battleId);
+  const rl = rouletteScreen(bt?.place_name || '', Math.max(1, (bt?.players || 2) - 1));
+  const outcome = await new Promise((resolve) => {
+    rl.onLater(() => resolve('later'));
+    rl.onSpin(async () => {
+      rl.setBusy(true);
+      const { data: game, error } = await sb.rpc('spin_roulette', { p_battle: battleId });
+      if (error) { toast(friendlyError(error), true); resolve('later'); return; }
+      flushPush();
+      await rl.land(game);
+      await sleep(800);
+      resolve('spun');
+    });
+  });
+  await loadAll().catch(() => {});
+  render();
+  if (outcome !== 'spun') { closeOverlay(); return; }
+  await playFlow(battleId);
+}
+
+async function playFlow(battleId) {
+  for (;;) {
+    const bt = battleById(battleId);
+    if (!bt || bt.status !== 'playing' || bt.finished) { closeOverlay(); render(); return; }
+    const g = GAMES[bt.game];
+    const rivals = bt.players - 1;
+    const go = await gameScreen(`
+      <div class="big">${g.emoji}</div>
+      <div class="eyebrow">«${esc(bt.place_name)}» · contra ${rivals} ${rivals === 1 ? 'rival' : 'rivales'}</div>
+      <h2>${g.name}</h2>
+      <p>${g.how}</p>
+      <div><span class="pill">Intento ${bt.attempts + 1} de 3</span>${bt.best !== null ? `<span class="pill">Tu mejor: ${bt.best}</span>` : ''}</div>
+      <p class="muted">Todos jugáis exactamente la misma partida y cuenta vuestro mejor intento. Si cierras la app a mitad, ese intento cuenta 0.</p>`,
+    [{ label: '¡Empezar!', value: true, primary: true }, { label: 'Ahora no', value: false }]);
+    if (!go) { closeOverlay(); return; }
+
+    const { data: st, error } = await sb.rpc('start_attempt', { p_battle: battleId });
+    if (error || !st?.ok) {
+      toast(error ? friendlyError(error) : st.reason, true);
+      closeOverlay(); await loadAll().catch(() => {}); render(); return;
+    }
+    const res = await runGame(st.game, st.seed, { attempt: st.attempt });
+    const { data: fin, error: e2 } = await sb.rpc('finish_attempt', { p_battle: battleId, p_score: res.score });
+    flushPush();
+    await loadAll().catch(() => {});
+    render();
+    if (e2 || !fin?.ok) { toast(e2 ? friendlyError(e2) : fin.reason, true); closeOverlay(); return; }
+
+    const left = fin.attempts_left;
+    const buttons = [];
+    if (!fin.finished && !fin.resolved && left > 0) {
+      buttons.push({ label: `Otro intento (${left === 1 ? 'queda 1' : `quedan ${left}`})`, value: 'again', primary: true });
+      buttons.push({ label: `Me planto con ${fin.best} puntos`, value: 'stop' });
+      buttons.push({ label: 'Lo sigo luego', value: 'exit' });
+    } else {
+      buttons.push({ label: fin.resolved ? 'Ver el resultado' : 'Cerrar', value: 'exit', primary: true });
+    }
+    const choice = await gameScreen(`
+      <div class="big">${fin.score > 0 && fin.score >= fin.best ? '🔥' : g.emoji}</div>
+      <h2 class="score-big">${fin.score} puntos</h2>
+      <p>${esc(res.summary)}</p>
+      <div><span class="pill">Tu mejor: ${fin.best}</span><span class="pill">${left === 1 ? 'Te queda 1 intento' : `Te quedan ${left} intentos`}</span></div>
+      ${fin.score !== res.score ? '<p class="muted">El servidor ha puesto 0 a este intento (demasiado corto o demasiado largo).</p>' : ''}
+      ${fin.resolved ? '<p><b>¡Ya habéis jugado todos! La batalla está resuelta.</b></p>'
+        : fin.finished ? '<p class="muted">Has gastado tus intentos. Te avisaremos del resultado.</p>' : ''}`, buttons);
+    if (choice === 'again') continue;
+    closeOverlay();
+    if (choice === 'stop') await call('stop_playing', { p_battle: battleId }, `Te plantas con ${fin.best} puntos`);
+    else render();
+    return;
+  }
+}
+
+function salseoCard(stats) {
+  const n = stats?.open_battles || 0;
+  return `
+    <div class="card salseo">
+      <span class="big">${n ? '⚔️' : '🕊️'}</span>
+      <span class="grow">
+        <strong>${n === 0 ? 'No hay batallas por jugar' : n === 1 ? 'Hay 1 batalla por jugar' : `Hay ${n} batallas por jugar`}</strong>
+        <span class="hint">${n ? `${stats.fighters} en liza · ` : 'Paz en el grupo… de momento · '}${stats?.resolved_total || 0} resueltas</span>
+      </span>
+    </div>`;
+}
+
+function battleBoard(bt) {
+  if (!bt.board) return '';
+  return `<div class="board">${bt.board.map((r, i) => `<span class="pill ${r.me ? 'me' : ''}">${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${r.best ?? '—'}${r.me ? ' (tú)' : ''}</span>`).join('')}</div>`;
+}
+
+function battleCard(bt) {
+  const g = bt.game ? GAMES[bt.game] : null;
+  const rivals = bt.players - 1;
+  let status = '', actions = '';
+  if (bt.status === 'spin') {
+    if (bt.challenger) {
+      status = '🎰 Te toca girar la ruleta para elegir el minijuego.';
+      actions = `<button class="btn primary" data-spin="${bt.id}">🎰 Girar la ruleta</button>`;
+    } else status = '⏳ Esperando a que quien provocó la batalla gire la ruleta…';
+  } else if (bt.status === 'playing') {
+    if (!bt.finished) {
+      const left = 3 - bt.attempts;
+      status = `Intentos: <b>${bt.attempts}/3</b>${bt.best !== null ? ` · Tu mejor: <b>${bt.best}</b>` : ''}`;
+      actions = `<button class="btn primary" data-play="${bt.id}">▶ ${bt.attempts ? `Jugar (${left === 1 ? 'queda 1' : `quedan ${left}`})` : 'Jugar'}</button>`
+        + (bt.attempts && !bt.open_attempt ? `<button class="btn ghost" data-stop="${bt.id}">Me planto</button>` : '');
+    } else status = `✅ Has terminado con <b>${bt.best ?? 0}</b> puntos. Esperando a tus rivales…`;
+    status += `<br><span class="hint">Rivales que ya han terminado: ${bt.rivals_done} de ${rivals}</span>`;
+  } else {
+    status = (bt.result === 'win' ? '🏆 <b>¡Ganaste!</b> El sitio es tuyo.'
+      : bt.result === 'rematch' ? '🤝 <b>Empate.</b> Se juega una revancha.'
+        : '💥 <b>Perdiste.</b> Otro jugador se lo queda.') + battleBoard(bt);
+  }
+  return `
+    <div class="card battle-card ${bt.status} ${bt.result || ''}">
+      <div class="bc-head">
+        <span class="bc-game">${g ? g.emoji : '🎰'}</span>
+        <span class="grow">
+          <strong>«${esc(bt.place_name)}»</strong>
+          <span class="hint">${bt.parent_id ? 'Revancha · ' : ''}contra ${rivals} ${rivals === 1 ? 'rival anónimo' : 'rivales anónimos'}${g ? ` · ${g.name}` : ''}</span>
+        </span>
+      </div>
+      <div class="bc-status">${status}</div>
+      ${actions ? `<div class="btn-row">${actions}</div>` : ''}
+      ${bt.status !== 'resolved' ? `<button class="link-btn" data-forfeit="${bt.id}" data-name="${esc(bt.place_name)}">Rendirme</button>` : ''}
+    </div>`;
+}
+
+function renderPool() {
+  const B = state.battles || { stats: {}, battles: [] };
+  const open = B.battles.filter((x) => x.status !== 'resolved');
+  const done = B.battles.filter((x) => x.status === 'resolved');
+  const d = state.drafts.pool;
+  $app.innerHTML = `
+    ${topbar('Mi pool')}
+    <main>
+      ${salseoCard(B.stats)}
+      ${open.length ? `<div class="section-title">Mis batallas</div><div class="stack-gap">${open.map(battleCard).join('')}</div>` : ''}
+      <div class="section-title"><span class="grow">Mi pool privado · ${state.pool.length}</span><span class="chip">solo lo ves tú</span></div>
+      <form class="card" id="pool-form" novalidate>
+        <div class="field"><label for="pool-name">Añadir un sitio</label>
+          <input class="input" id="pool-name" maxlength="80" placeholder="Nombre del bar o restaurante" value="${esc(d.name)}" autocomplete="off"></div>
+        <div class="field"><input class="input" id="pool-note" maxlength="200" placeholder="Comentario o enlace de Maps (opcional)" value="${esc(d.note)}" autocomplete="off"></div>
+        <button class="btn primary block" type="submit">${ICON.plus} Añadir a mi pool</button>
+        <p class="hint" style="margin:10px 0 0">⚔️ Si alguien más ya lo tiene en su pool, se abre una batalla y quien la gane se lo queda.</p>
+      </form>
+      ${state.pool.length ? `<ul class="pool" style="margin-top:12px">
+        ${state.pool.map((p) => `
+          <li class="pool-item">
+            <span class="ico">${p.battle_id ? '⚔️' : '🍽️'}</span>
+            <span class="body">
+              <span class="name">${esc(p.name)}</span>
+              ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
+              ${p.battle_id ? '<span class="hint">En batalla: no se puede proponer hasta que la ganes</span>' : p.proposed ? '<span class="hint">✅ Propuesto en la sesión actual</span>' : ''}
+            </span>
+            ${!p.battle_id && !p.proposed ? `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>` : ''}
+          </li>`).join('')}
+      </ul>` : '<div class="card empty" style="margin-top:12px;padding:24px">Tu pool está vacío. Añade los sitios que te gustaría proponer.</div>'}
+      ${done.length ? `<div class="section-title">Batallas terminadas</div><div class="stack-gap">${done.map(battleCard).join('')}</div>` : ''}
+      ${isAdmin() && B.admin?.length ? `
+        <div class="admin-box">
+          <div class="section-title">Admin · batallas abiertas (anónimas)</div>
+          ${B.admin.map((a) => `
+            <div class="stand-row">
+              <span class="grow"><span class="name">Batalla #${a.id} · ${a.players} jugadores</span>
+                <span class="breakdown">${a.status === 'spin' ? 'Ruleta sin girar' : `${GAMES[a.game]?.name} · han terminado ${a.done} de ${a.players}`}</span></span>
+              <button class="btn ghost small" data-force="${a.id}" data-status="${a.status}">${a.status === 'spin' ? 'Girar ruleta' : 'Resolver ya'}</button>
+            </div>`).join('')}
+          <p class="hint">Úsalo solo si una batalla se queda atascada. «Resolver ya» decide con lo jugado hasta ahora.</p>
+        </div>` : ''}
+    </main>
+    ${tabbar('pool')}`;
+  bindCommon();
+
+  const f = document.getElementById('pool-form');
+  const nameEl = f.querySelector('#pool-name'), noteEl = f.querySelector('#pool-note');
+  nameEl.oninput = () => (d.name = nameEl.value);
+  noteEl.oninput = () => (d.note = noteEl.value);
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    if (d.name.trim().length < 2) return toast('Escribe el nombre del sitio', true);
+    const btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
+    const res = await addPlace(d.name, d.note);
+    btn.disabled = false;
+    if (res) { state.drafts.pool = { name: '', note: '' }; render(); }
+  };
+  $app.querySelectorAll('[data-remove]').forEach((b) => (b.onclick = async () => {
+    if (await confirmSheet({ title: `¿Quitar «${b.dataset.name}»?`, text: 'Lo borrarás de tu pool.', okLabel: 'Quitar', danger: true })) {
+      call('remove_from_pool', { p_place: Number(b.dataset.remove) }, 'Quitado de tu pool');
+    }
+  }));
+  $app.querySelectorAll('[data-spin]').forEach((b) => (b.onclick = () => spinFlow(Number(b.dataset.spin))));
+  $app.querySelectorAll('[data-play]').forEach((b) => (b.onclick = () => playFlow(Number(b.dataset.play))));
+  $app.querySelectorAll('[data-stop]').forEach((b) => (b.onclick = async () => {
+    const bt = battleById(Number(b.dataset.stop));
+    if (await confirmSheet({ title: '¿Te plantas?', text: `Te quedas con ${bt?.best ?? 0} puntos y renuncias a los intentos que te quedan.`, okLabel: 'Me planto' })) {
+      call('stop_playing', { p_battle: Number(b.dataset.stop) }, 'Te has plantado');
+    }
+  }));
+  $app.querySelectorAll('[data-forfeit]').forEach((b) => (b.onclick = async () => {
+    if (await confirmSheet({ title: '¿Rendirte?', text: `Saldrás de la batalla y perderás «${b.dataset.name}» de tu pool.`, okLabel: 'Me rindo', danger: true })) {
+      call('forfeit_battle', { p_battle: Number(b.dataset.forfeit) }, 'Te has rendido 🏳️');
+    }
+  }));
+  $app.querySelectorAll('[data-force]').forEach((b) => (b.onclick = async () => {
+    const spin = b.dataset.status === 'spin';
+    if (await confirmSheet({ title: spin ? '¿Girar la ruleta por el retador?' : '¿Resolver la batalla ya?', text: spin ? 'Se elegirá el minijuego al azar.' : 'Se decidirá con los intentos jugados hasta ahora.', okLabel: 'Sí' })) {
+      call('admin_force_battle', { p_battle: Number(b.dataset.force) }, 'Hecho');
+    }
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Avisos push (iPhone con la web en inicio y Android)
+// ---------------------------------------------------------------------------
+const PUSH_FN = `${SUPABASE_URL}/functions/v1/push`;
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let swReg = null;
+
+function pushStatus() {
+  if (isIOS() && !isStandalone()) return 'ios-install';
+  if (!pushSupported()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  return state.pushOn ? 'on' : 'off';
+}
+function b64uToBytes(s) {
+  const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+  return Uint8Array.from(b, (c) => c.charCodeAt(0));
+}
+async function vapidKey() {
+  const r = await fetch(PUSH_FN, { headers: { apikey: SUPABASE_KEY } });
+  const j = await r.json();
+  if (!j.publicKey) throw new Error(j.error || 'El servidor de avisos no responde');
+  return j.publicKey;
+}
+async function enablePush(interactive) {
+  if (!pushSupported()) return false;
+  if (interactive) {
+    const perm = await Notification.requestPermission();   // debe ser lo primero tras el toque (iPhone)
+    if (perm !== 'granted') { toast('Sin permiso no te podemos avisar', true); return false; }
+  } else if (Notification.permission !== 'granted') return false;
+  const reg = swReg || (await navigator.serviceWorker.ready);
+  const key = await vapidKey();
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && lsGet('almuerzos-vapid') !== key) { await sub.unsubscribe().catch(() => {}); sub = null; }
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(key) });
+  const j = sub.toJSON();
+  const { error } = await sb.rpc('save_push_subscription', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+  if (error) throw error;
+  lsSet('almuerzos-vapid', key);
+  state.pushOn = true;
+  return true;
+}
+async function disablePush() {
+  if (!pushSupported()) return;
+  const reg = swReg || (await navigator.serviceWorker.getRegistration());
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) {
+    await sb.rpc('delete_push_subscription', { p_endpoint: sub.endpoint });
+    await sub.unsubscribe().catch(() => {});
+  }
+  state.pushOn = false;
+}
+// Envía los avisos que acaba de provocar este usuario (la función solo recoge los suyos)
+function flushPush() {
+  if (!state.session) return;
+  sb.functions.invoke('push', { body: {} }).catch(() => {});
+}
+async function setupPush() {
+  try {
+    if ('serviceWorker' in navigator) {
+      swReg = await navigator.serviceWorker.register('./sw.js');
+      navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'go' && e.data.url) go(e.data.url); });
+    }
+    if (pushSupported() && Notification.permission === 'granted') await enablePush(false);
+  } catch (e) { console.warn('avisos', e); }
+  flushPush();
+  render();
+}
+
+function pushCard(where) {
+  const st = pushStatus();
+  if (st === 'on' || st === 'unsupported') return '';
+  if (where === 'home' && (lsGet('almuerzos-push-dismiss') || st === 'denied')) return '';
+  const later = where === 'home' ? '<button class="btn ghost small" data-push-dismiss>Ahora no</button>' : '';
+  if (st === 'ios-install') return `
+    <div class="card push-card">
+      <strong>🔔 Avisos en iPhone</strong>
+      <p class="hint">Para enterarte de batallas y votaciones: en Safari toca <b>Compartir</b> → <b>Añadir a pantalla de inicio</b> y abre la app desde ese icono. Luego actívalos aquí.</p>
+      ${later ? `<div class="btn-row">${later}</div>` : ''}
+    </div>`;
+  if (st === 'denied') return `
+    <div class="card push-card"><strong>🔕 Avisos bloqueados</strong>
+      <p class="hint">Has bloqueado los avisos para esta web. Actívalos en los ajustes del móvil (Notificaciones) y vuelve aquí.</p></div>`;
+  return `
+    <div class="card push-card">
+      <strong>🔔 Activa los avisos</strong>
+      <p class="hint">Te avisaremos si te retan a una batalla, cuando toque votar o puntuar… Sin teléfono ni email.</p>
+      <div class="btn-row"><button class="btn primary small" data-push-on>Activar avisos</button>${later}</div>
+    </div>`;
+}
+function pushSettings() {
+  if (pushStatus() !== 'on') return pushCard('profile') || '<div class="card"><p class="hint" style="margin:0">Este navegador no admite avisos.</p></div>';
+  return `
+    <div class="card">
+      <strong>✅ Avisos activados en este dispositivo</strong>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn ghost small" data-push-test>Enviar aviso de prueba</button>
+        <button class="btn ghost small" data-push-off>Desactivar</button>
+      </div>
+    </div>`;
+}
+function bindPushCard() {
+  $app.querySelectorAll('[data-push-on]').forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    try { if (await enablePush(true)) toast('🔔 Avisos activados'); } catch (e) { toast(friendlyError(e), true); }
+    render();
+  }));
+  $app.querySelectorAll('[data-push-dismiss]').forEach((b) => (b.onclick = () => { lsSet('almuerzos-push-dismiss', '1'); render(); }));
+  $app.querySelectorAll('[data-push-off]').forEach((b) => (b.onclick = async () => {
+    try { await disablePush(); toast('Avisos desactivados'); } catch (e) { toast(friendlyError(e), true); }
+    render();
+  }));
+  $app.querySelectorAll('[data-push-test]').forEach((b) => (b.onclick = async () => {
+    const { error } = await sb.rpc('push_test');
+    if (error) return toast(friendlyError(error), true);
+    const { data, error: e2 } = await sb.functions.invoke('push', { body: {} });
+    if (e2) return toast('No se pudo enviar el aviso', true);
+    toast(data?.sent ? '🔔 Aviso enviado: debería llegarte en unos segundos' : 'No se ha podido entregar el aviso', !data?.sent);
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Arranque
 // ---------------------------------------------------------------------------
 async function onSession(session) {
@@ -1026,7 +1488,9 @@ async function onSession(session) {
   state.session = session;
   if (!session) {
     unsubscribe();
-    Object.assign(state, { me: null, loaded: false, sessions: [], league: null, profiles: new Map(), boards: new Map(), moves: new Map() });
+    Object.assign(state, { me: null, loaded: false, sessions: [], league: null, profiles: new Map(), boards: new Map(), moves: new Map(), pool: [], battles: null, pushOn: false });
+    closeOverlay();
+    updateAppBadge();
     render();
     return;
   }
@@ -1040,6 +1504,7 @@ async function onSession(session) {
     toast(friendlyError(e), true);
   }
   render();
+  setupPush();
 }
 
 sb.auth.onAuthStateChange((_event, session) => {

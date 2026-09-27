@@ -350,3 +350,79 @@ textarea.input { min-height: 76px; resize: vertical; }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg) } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Minijuegos y ruleta ---------- */
+body.no-scroll { overflow: hidden; overscroll-behavior: none; }
+.game-overlay {
+  position: fixed; inset: 0; z-index: 200; background: #1c1714; color: #fff;
+  display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.game-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; }
+.game-name { font-weight: 800; }
+.game-name small { font-weight: 600; opacity: .7; }
+.game-quit { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 700; }
+.game-stage { flex: 1; position: relative; display: grid; place-items: center; min-height: 0; padding-bottom: 8px; }
+.game-stage canvas { display: block; border-radius: 16px; touch-action: none; }
+.game-count { position: absolute; inset: 0; display: grid; place-items: center; font: 800 88px/1 var(--display); color: #fff; text-shadow: 0 4px 20px rgba(0,0,0,.45); pointer-events: none; }
+.game-screen { margin: auto; width: 100%; max-width: 420px; padding: 24px 20px; text-align: center; overflow: auto; max-height: 100%; }
+.game-screen .big { font-size: 72px; line-height: 1; }
+.game-screen h2 { font: 800 28px/1.15 var(--display); margin: 10px 0 8px; }
+.game-screen p { color: rgba(255,255,255,.82); margin: 6px 0; }
+.game-screen .muted { color: rgba(255,255,255,.65); }
+.game-screen .score-big { color: #ffa94d; }
+.game-screen .pill { display: inline-block; margin: 4px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.1); font-weight: 700; font-size: 14px; }
+.game-buttons { display: grid; gap: 10px; margin-top: 22px; }
+.game-overlay .btn.ghost { color: #fff; border-color: rgba(255,255,255,.25); }
+.game-overlay .eyebrow { color: #ffa94d; }
+.wheel-wrap { position: relative; width: 280px; height: 280px; margin: 22px auto 0; }
+.wheel-pointer { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 30px; color: #fff; z-index: 2; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.wheel { display: block; }
+.wheel-result { min-height: 86px; margin-top: 14px; display: grid; justify-items: center; gap: 4px; font-size: 18px; }
+.wheel-result .big { font-size: 48px; }
+
+/* ---------- Pool, batallas y avisos ---------- */
+.tabbar a { position: relative; }
+.tab-badge {
+  position: absolute; top: 7px; left: calc(50% + 5px); min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800;
+  display: grid; place-items: center; line-height: 1;
+}
+.alert-card { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); background: var(--accent-soft); margin-bottom: 12px; }
+.alert-card .big, .salseo .big { font-size: 32px; line-height: 1; }
+.alert-card .grow, .salseo .grow { flex: 1; display: grid; min-width: 0; }
+.alert-card .go { color: var(--accent); font-weight: 800; font-size: 20px; }
+.salseo { display: flex; align-items: center; gap: 12px; }
+.salseo-line {
+  display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 12px 14px; border-radius: 14px;
+  background: var(--surface-2); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px;
+}
+.salseo-line .grow { flex: 1; }
+.push-card { margin-bottom: 12px; }
+.push-card p { margin: 6px 0 12px; }
+.battle-card .bc-head { display: flex; align-items: center; gap: 12px; }
+.battle-card .bc-game { font-size: 28px; width: 46px; height: 46px; display: grid; place-items: center; background: var(--surface-2); border-radius: 12px; flex: none; }
+.battle-card .grow { flex: 1; display: grid; min-width: 0; }
+.battle-card .grow strong { overflow-wrap: anywhere; }
+.battle-card .bc-status { margin: 12px 0; line-height: 1.5; }
+.battle-card.spin, .battle-card.playing { border-left: 4px solid var(--accent); }
+.battle-card.resolved.win { border-left: 4px solid var(--ok); }
+.battle-card.resolved { opacity: .92; }
+.link-btn { background: none; border: 0; padding: 10px 0 0; color: var(--muted); font-size: 13px; text-decoration: underline; }
+.board { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.board .pill { padding: 5px 10px; border-radius: 999px; background: var(--surface-2); font-weight: 700; font-size: 13px; }
+.board .pill.me { background: var(--accent-soft); color: var(--accent); }
+.field-label { display: block; font-weight: 600; font-size: 14px; }
+.pick-list { display: grid; gap: 8px; margin: 10px 0 12px; }
+.pick { display: flex; align-items: center; gap: 10px; padding: 12px; border: 2px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--surface); }
+.pick.on { border-color: var(--accent); background: var(--accent-soft); }
+.pick.disabled { opacity: .55; cursor: default; }
+.pick input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; margin: 0; }
+.pick .body { flex: 1; display: grid; min-width: 0; }
+.pick .name { font-weight: 700; overflow-wrap: anywhere; }
+.pick .note { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.add-inline { margin: 4px 0 8px; }
+.icon-btn.small { width: 34px; height: 34px; }
+.icon-btn.small svg { width: 18px; height: 18px; }
+.pool-item { align-items: center; }
