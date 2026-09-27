@@ -4,5 +4,5 @@
 export const SUPABASE_URL = 'https://xvcjfsvartxiudvwczgb.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_Tcv1SA3u2xU6sDKIjQnVuQ_GkuRaVZI';
 
-// Dominio de los emails inventados: en la web se escribe "ana" y se entra como ana@grupo.app
-export const EMAIL_DOMAIN = 'grupo.app';
+// Dominio de los emails inventados: en la web se escribe "ana" y se entra como ana@almuerzosmuytochos.app
+export const EMAIL_DOMAIN = 'almuerzosmuytochos.app';

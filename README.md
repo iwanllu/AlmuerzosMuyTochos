@@ -5,7 +5,7 @@ App de votaciones para el grupo → **https://iwanllu.github.io/AlmuerzosMuyToch
 Web estática (HTML + JS, sin build) sobre Supabase (proyecto `almuerzos`, Central EU · Frankfurt).
 
 ## Qué hace
-- Login con usuario y contraseña (se escribe `ana`; por dentro es `ana@grupo.app`). La sesión se queda guardada en el móvil.
+- Login con usuario y contraseña (se escribe `ana`; por dentro es `ana@almuerzosmuytochos.app`). La sesión se queda guardada en el móvil.
 - Perfil con nombre y foto.
 - Votaciones de dos tipos: **elegir opción** o **puntuar del 1 al 10**. Un voto por persona (se puede cambiar mientras está abierta). Resultados en directo.
 - Solo el admin crea, cierra/reabre y borra votaciones.
@@ -13,7 +13,7 @@ Web estática (HTML + JS, sin build) sobre Supabase (proyecto `almuerzos`, Centr
 ## Tareas de admin (Supabase → SQL Editor / Authentication)
 | Tarea | Cómo |
 |---|---|
-| Añadir un amigo | Authentication → Users → Add user → Create new user → `nombre@grupo.app`, contraseña, **Auto Confirm User** marcado |
+| Añadir un amigo | Authentication → Users → Add user → Create new user → `nombre@almuerzosmuytochos.app`, contraseña, **Auto Confirm User** marcado |
 | Resetear contraseña | `supabase/reset-password.sql` (cambia usuario y clave) |
 | Hacer admin a alguien | `supabase/make-admin.sql` |
 | Quitar a un amigo | Authentication → Users → ⋯ → Delete user (se borran también sus votos) |
