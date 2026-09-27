@@ -74,6 +74,9 @@ create table if not exists public.proposals (
   unique (session_id, user_id)                                   -- una propuesta por persona y sesión
 );
 create unique index if not exists proposals_unique_name on public.proposals (session_id, lower(name));
+-- Sitio de Google Maps (solo se guarda su identificador; foto y web se consultan a Google al mostrarlos)
+alter table public.proposals add column if not exists place_id text;
+create unique index if not exists proposals_unique_place on public.proposals (session_id, place_id) where place_id is not null;
 
 create table if not exists public.session_votes (
   session_id  bigint not null references public.sessions (id) on delete cascade,
@@ -342,8 +345,9 @@ begin
   return public._advance(p_session);
 end $$;
 
--- Proponer (o cambiar) mi sitio
-create or replace function public.propose(p_session bigint, p_name text, p_note text default null)
+-- Proponer (o cambiar) mi sitio (interna: se usa desde propose_place con un sitio del pool)
+drop function if exists public.propose(bigint, text, text);
+create or replace function public.propose(p_session bigint, p_name text, p_note text default null, p_place_id text default null)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
   uid uuid := auth.uid();
@@ -360,9 +364,9 @@ begin
   if ph <> 'proposals' then raise exception 'El plazo de propuestas ya está cerrado'; end if;
 
   begin
-    insert into public.proposals (session_id, user_id, name, note)
-    values (p_session, uid, nm, nullif(btrim(coalesce(p_note, '')), ''))
-    on conflict (session_id, user_id) do update set name = excluded.name, note = excluded.note;
+    insert into public.proposals (session_id, user_id, name, note, place_id)
+    values (p_session, uid, nm, nullif(btrim(coalesce(p_note, '')), ''), p_place_id)
+    on conflict (session_id, user_id) do update set name = excluded.name, note = excluded.note, place_id = excluded.place_id;
   exception when unique_violation then
     raise exception 'Ese sitio ya está propuesto. Elige otro';
   end;
@@ -455,18 +459,18 @@ begin
     -- Pool anónimo. Orden: en propuestas, alfabético; después, por votos (sin enseñar cuántos)
     'proposals', coalesce((
       select jsonb_agg(jsonb_build_object(
-               'id', x.id, 'name', x.name, 'note', x.note,
+               'id', x.id, 'name', x.name, 'note', x.note, 'place_id', x.place_id,
                'mine', x.user_id = uid, 'winner', coalesce(x.id = s.winner_proposal_id, false))
              order by x.first desc, x.n desc, lower(x.name))
       from (
-        select p.id, p.name, p.note, p.user_id,
+        select p.id, p.name, p.note, p.place_id, p.user_id,
           (s.phase in ('rating', 'closed') and p.id = s.winner_proposal_id) as first,
           case when s.phase = 'proposals' then 0
                else (select count(*) from public.session_votes v where v.proposal_id = p.id) end as n
         from public.proposals p
         where p.session_id = s.id
       ) x), '[]'::jsonb),
-    'my_proposal', (select jsonb_build_object('id', p.id, 'name', p.name, 'note', p.note)
+    'my_proposal', (select jsonb_build_object('id', p.id, 'name', p.name, 'note', p.note, 'place_id', p.place_id)
                     from public.proposals p where p.session_id = s.id and p.user_id = uid),
     'my_vote', (select v.proposal_id from public.session_votes v where v.session_id = s.id and v.user_id = uid),
     'my_ratings', (select jsonb_object_agg(c.key, r.score)
@@ -524,7 +528,7 @@ revoke execute on function public._members_count(), public._refresh_session(bigi
   from public, anon, authenticated;
 
 -- propose() queda interna: se propone desde el pool privado con propose_place() (04-batallas.sql)
-revoke execute on function public.propose(bigint, text, text) from public, anon, authenticated;
+revoke execute on function public.propose(bigint, text, text, text) from public, anon, authenticated;
 
 revoke execute on function public.create_session(date, time, text), public.advance_session(bigint),
                            public.withdraw_proposal(bigint),

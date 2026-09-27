@@ -54,6 +54,9 @@ create table if not exists public.pool_places (
   unique (user_id, name_key)
 );
 create index if not exists pool_places_key_idx on public.pool_places (name_key);
+-- Sitio de Google Maps: solo su identificador (foto, dirección y web se piden a Google al mostrarlos)
+alter table public.pool_places add column if not exists place_id text;
+alter table public.battles add column if not exists place_id text;
 
 create table if not exists public.battle_players (
   battle_id          bigint not null references public.battles (id) on delete cascade,
@@ -165,8 +168,8 @@ begin
       perform public._notify(r.user_id, format('💥 Has perdido «%s»', b.place_name), 'Otro jugador se lo queda.', '#/pool', 'battle-' || p_battle);
     end loop;
     delete from public.pool_places where battle_id = p_battle and not (user_id = any(tied));
-    insert into public.battles (name_key, place_name, status, game, seed, challenger_id, parent_id, spun_at)
-    values (b.name_key, b.place_name, 'playing', b.game, 1 + floor(random() * 2147483646)::int, b.challenger_id, p_battle, now())
+    insert into public.battles (name_key, place_name, place_id, status, game, seed, challenger_id, parent_id, spun_at)
+    values (b.name_key, b.place_name, b.place_id, 'playing', b.game, 1 + floor(random() * 2147483646)::int, b.challenger_id, p_battle, now())
     returning id into nb;
     update public.pool_places set battle_id = nb where battle_id = p_battle;
     insert into public.battle_players (battle_id, user_id) select nb, x from unnest(tied) x;
@@ -203,12 +206,16 @@ begin
 end $$;
 
 -- ---------- Pool privado ----------
-create or replace function public.add_to_pool(p_name text, p_note text default null)
+-- Con sitio de Google Maps, la coincidencia es exacta por su identificador;
+-- sin él (sitios antiguos), por el nombre normalizado.
+drop function if exists public.add_to_pool(text, text);
+create or replace function public.add_to_pool(p_name text, p_note text default null, p_place_id text default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   uid uuid := auth.uid();
   nm text := regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g');
   nt text := nullif(btrim(coalesce(p_note, '')), '');
+  gp text := nullif(btrim(coalesce(p_place_id, '')), '');
   k text;
   b public.battles;
   holders uuid[];
@@ -220,7 +227,8 @@ begin
   if char_length(nm) < 2 then raise exception 'Escribe el nombre del sitio'; end if;
   if char_length(nm) > 80 then raise exception 'El nombre es demasiado largo'; end if;
   if char_length(coalesce(nt, '')) > 200 then raise exception 'El comentario es demasiado largo'; end if;
-  k := public._name_key(nm);
+  if gp is not null and (gp !~ '^[A-Za-z0-9_-]+$' or char_length(gp) not between 10 and 300) then raise exception 'Sitio de Google Maps no válido'; end if;
+  k := case when gp is not null then 'g:' || gp else public._name_key(nm) end;
   if char_length(k) < 2 then raise exception 'Escribe un nombre válido'; end if;
 
   perform pg_advisory_xact_lock(hashtext('pool:' || k));   -- evita carreras con el mismo sitio
@@ -232,35 +240,35 @@ begin
   -- Batalla sin resolver por este sitio → te unes
   select * into b from public.battles where name_key = k and status <> 'resolved';
   if found then
-    insert into public.pool_places (user_id, name, name_key, note, battle_id) values (uid, nm, k, nt, b.id) returning id into pid;
+    insert into public.pool_places (user_id, name, name_key, note, battle_id, place_id) values (uid, nm, k, nt, b.id, gp) returning id into pid;
     insert into public.battle_players (battle_id, user_id) values (b.id, uid);
     select count(*) into n from public.battle_players where battle_id = b.id;
     for u in select public._battle_players_except(b.id, uid) loop
       perform public._notify(u, '⚔️ Se une otro rival', format('La batalla por «%s» ahora es de %s jugadores.', b.place_name, n), '#/pool', 'battle-' || b.id);
     end loop;
     perform public._battles_changed();
-    return jsonb_build_object('result', 'joined', 'battle_id', b.id, 'place_id', pid, 'rivals', n - 1, 'place_name', b.place_name, 'status', b.status);
+    return jsonb_build_object('result', 'joined', 'battle_id', b.id, 'pool_id', pid, 'rivals', n - 1, 'place_name', b.place_name, 'status', b.status);
   end if;
 
   select array_agg(user_id order by created_at) into holders from public.pool_places where name_key = k;
   if holders is null then
-    insert into public.pool_places (user_id, name, name_key, note) values (uid, nm, k, nt) returning id into pid;
-    return jsonb_build_object('result', 'added', 'place_id', pid);
+    insert into public.pool_places (user_id, name, name_key, note, place_id) values (uid, nm, k, nt, gp) returning id into pid;
+    return jsonb_build_object('result', 'added', 'pool_id', pid);
   end if;
 
   -- Lo tiene otro → nueva batalla; quien la provoca gira la ruleta
-  insert into public.battles (name_key, place_name, challenger_id)
-  values (k, (select name from public.pool_places where name_key = k order by created_at limit 1), uid)
+  insert into public.battles (name_key, place_name, place_id, challenger_id)
+  values (k, (select name from public.pool_places where name_key = k order by created_at limit 1), gp, uid)
   returning * into b;
   update public.pool_places set battle_id = b.id where name_key = k;
-  insert into public.pool_places (user_id, name, name_key, note, battle_id) values (uid, nm, k, nt, b.id) returning id into pid;
+  insert into public.pool_places (user_id, name, name_key, note, battle_id, place_id) values (uid, nm, k, nt, b.id, gp) returning id into pid;
   insert into public.battle_players (battle_id, user_id) select b.id, x from unnest(holders || uid) x;
   n := array_length(holders, 1) + 1;
   foreach u in array holders loop
     perform public._notify(u, '⚔️ ¡Te han retado!', format('Alguien más quiere «%s». Sois %s en la batalla.', b.place_name, n), '#/pool', 'battle-' || b.id);
   end loop;
   perform public._battles_changed();
-  return jsonb_build_object('result', 'battle', 'battle_id', b.id, 'place_id', pid, 'rivals', n - 1, 'place_name', b.place_name, 'status', 'spin');
+  return jsonb_build_object('result', 'battle', 'battle_id', b.id, 'pool_id', pid, 'rivals', n - 1, 'place_name', b.place_name, 'status', 'spin');
 end $$;
 
 create or replace function public.remove_from_pool(p_place bigint)
@@ -273,10 +281,10 @@ end $$;
 create or replace function public.my_pool()
 returns jsonb language sql stable security definer set search_path = '' as $$
   select coalesce(jsonb_agg(jsonb_build_object(
-           'id', pp.id, 'name', pp.name, 'note', pp.note, 'battle_id', pp.battle_id,
+           'id', pp.id, 'name', pp.name, 'note', pp.note, 'battle_id', pp.battle_id, 'place_id', pp.place_id,
            'proposed', exists (select 1 from public.proposals pr join public.sessions s on s.id = pr.session_id
                                where s.phase <> 'closed' and pr.user_id = pp.user_id
-                                 and public._name_key(pr.name) = pp.name_key))
+                                 and (pr.place_id = pp.place_id or (pp.place_id is null and public._name_key(pr.name) = pp.name_key))))
          order by lower(pp.name)), '[]'::jsonb)
   from public.pool_places pp where pp.user_id = auth.uid();
 $$;
@@ -290,7 +298,7 @@ begin
   select * into pl from public.pool_places where id = p_place and user_id = auth.uid();
   if not found then raise exception 'Ese sitio no está en tu pool'; end if;
   if pl.battle_id is not null then raise exception 'Ese sitio está en batalla: podrás proponerlo cuando la ganes'; end if;
-  perform public.propose(p_session, pl.name, pl.note);
+  perform public.propose(p_session, pl.name, pl.note, pl.place_id);
 end $$;
 
 -- ---------- Batallas ----------
@@ -438,7 +446,7 @@ begin
               from public.battle_stats where id = 1),
     'battles', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', b.id, 'place_name', b.place_name, 'status', b.status, 'game', b.game, 'parent_id', b.parent_id,
+        'id', b.id, 'place_name', b.place_name, 'place_id', b.place_id, 'status', b.status, 'game', b.game, 'parent_id', b.parent_id,
         'created_at', b.created_at, 'resolved_at', b.resolved_at,
         'challenger', b.challenger_id = uid,
         'players', (select count(*) from public.battle_players x where x.battle_id = b.id),
@@ -468,13 +476,13 @@ end $$;
 revoke execute on function public._battles_changed(), public._battle_players_except(bigint, uuid),
                            public._resolve(bigint), public._try_resolve(bigint)
   from public, anon, authenticated;
-revoke execute on function public.add_to_pool(text, text), public.remove_from_pool(bigint), public.my_pool(),
+revoke execute on function public.add_to_pool(text, text, text), public.remove_from_pool(bigint), public.my_pool(),
                            public.propose_place(bigint, bigint), public.spin_roulette(bigint),
                            public.start_attempt(bigint), public.finish_attempt(bigint, int),
                            public.stop_playing(bigint), public.forfeit_battle(bigint),
                            public.admin_force_battle(bigint), public.my_battles()
   from public, anon;
-grant execute on function public.add_to_pool(text, text), public.remove_from_pool(bigint), public.my_pool(),
+grant execute on function public.add_to_pool(text, text, text), public.remove_from_pool(bigint), public.my_pool(),
                           public.propose_place(bigint, bigint), public.spin_roulette(bigint),
                           public.start_attempt(bigint), public.finish_attempt(bigint, int),
                           public.stop_playing(bigint), public.forfeit_battle(bigint),
