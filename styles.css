@@ -430,7 +430,7 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 /* ---------- Modo entrenamiento ---------- */
 .practice { margin-top: 12px; }
 .practice p { margin: 4px 0 12px; }
-.practice-games { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.practice-games { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
 .practice-game {
   display: grid; justify-items: center; gap: 2px; padding: 12px 6px; border-radius: 14px;
   border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; font-size: 13px; text-align: center;

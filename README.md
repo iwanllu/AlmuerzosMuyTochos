@@ -16,11 +16,12 @@ Un almuerzo al mes = una **sesión**. Cada sesión pasa por 4 fases (avanzan sol
 
 ### Pool privado y batallas ⚔️
 - Cada uno tiene su **pool privado** de sitios (nadie más lo ve) y en la fase de propuestas elige uno de ahí.
-- Si añades a tu pool un sitio que ya tiene otro → **batalla**. Quien la provoca gira la **ruleta**, que elige un minijuego: 🥪 Bocata tocho, 🫒 Hueso de oliva, 🥜 Los cacaos del gasto o 🥖 Corta la barra.
+- Si añades a tu pool un sitio que ya tiene otro → **batalla**. Quien la provoca gira la **ruleta**, que elige un minijuego: 🥪 Bocata tocho, 🥜 Los cacaos del gasto o 🥖 Corta la barra.
 - Si más gente añade el mismo sitio antes de que se resuelva, entra en la misma batalla. Tras resolverse, un nuevo interesado reta al que lo tiene.
 - Rivales anónimos: solo se sabe cuántos son. 3 intentos cada uno, cuenta el mejor; todos juegan la misma partida (misma semilla). Empate total → revancha.
 - Quien gana se queda el sitio; los demás lo pierden. Mientras dura la batalla, nadie puede proponerlo.
 - Todo el grupo ve cuántas batallas hay por jugar.
+- En Mi pool hay un **modo entrenamiento** para practicar los minijuegos sin que cuente.
 
 ### Avisos 🔔
 Notificaciones push (Android e iPhone con la web añadida a la pantalla de inicio, iOS 16.4+) y avisos dentro de la web. Sin teléfono ni email. Se activan en Perfil → Avisos.

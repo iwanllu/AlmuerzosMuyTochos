@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
-import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=4';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=5';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
