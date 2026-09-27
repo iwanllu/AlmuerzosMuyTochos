@@ -245,12 +245,19 @@ function route() {
 const go = (hash) => { if (location.hash === hash) render(); else location.hash = hash; };
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 
-function topbar(title, back = false) {
+// Cabecera fija con el logo (en todas las secciones). El título de la página va debajo y se desplaza.
+function topbar(title = '', back = false) {
+  const nb = myBattleActions();
   return `
     <header class="topbar">
       ${back ? `<button class="icon-btn" data-go="${back === true ? '#/' : back}" aria-label="Volver">${ICON.back}</button>` : ''}
-      <h1>${title}</h1>
-    </header>`;
+      <a class="brand" href="#/" aria-label="Almuerzos Muy Tochos · Inicio">
+        <img src="icon.svg" alt="" width="36" height="36">
+        <span class="wordmark">Almuerzos<b>Muy Tochos</b></span>
+      </a>
+      ${nb && route().name !== 'pool' ? `<a class="top-alert" href="#/pool" aria-label="${nb === 1 ? 'Tienes 1 batalla esperándote' : `Tienes ${nb} batallas esperándote`}">⚔️<span class="t">${nb === 1 ? ' Te toca jugar' : ` ${nb} batallas`}</span><span class="n">${nb}</span></a>` : ''}
+    </header>
+    ${title ? `<h1 class="page-title">${title}</h1>` : ''}`;
 }
 function tabbar(active) {
   const t = (key, href, icon, label, badge = 0) => `<a href="${href}" class="${active === key ? 'active' : ''}" ${active === key ? 'aria-current="page"' : ''}>${icon}<span>${label}</span>${badge ? `<span class="tab-badge" aria-label="${badge} pendientes">${badge}</span>` : ''}</a>`;
@@ -380,17 +387,26 @@ function pending(b) {
   const verb = s.phase === 'proposals' ? 'proponer' : s.phase === 'voting' ? 'votar' : 'puntuar';
   return { done, total: b.members, missing: Math.max(0, b.members - done), verb };
 }
+// Participación: cuántos faltan y qué pasa cuando estéis todos
+const PHASE_TEXT = {
+  proposals: { did: 'han propuesto', didOne: 'ha propuesto', last: 'proponga el último', then: 'se cierran las propuestas y empieza la votación', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
+  voting: { did: 'han votado', didOne: 'ha votado', last: 'vote el último', then: 'se cierra la votación y el primero del ranking será el sitio del almuerzo', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
+  rating: { did: 'han puntuado', didOne: 'ha puntuado', last: 'puntúe el último', then: 'se desvela quién propuso el sitio ganador y se lleva sus puntos', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
+};
 function counter(b) {
   const p = pending(b);
+  const t = PHASE_TEXT[b.session.phase];
   const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+  const all = p.missing === 0;
   return `
+    <div class="section-title">Participación</div>
     <div class="card counter" aria-live="polite">
       <div class="row">
-        <span class="big ${p.missing === 0 ? 'ok' : ''}">${p.missing}</span>
-        <span class="label">${p.missing === 1 ? `falta 1 por ${p.verb}` : `faltan por ${p.verb}`}</span>
+        <span class="big ${all ? 'ok' : ''}">${all ? '✓' : p.missing}</span>
+        <span class="label">${all ? t.all : `de ${p.total} aún no ${p.missing === 1 ? t.didOne : t.did}`}</span>
       </div>
-      <div class="bar ${p.missing === 0 ? 'ok' : ''}"><i style="width:${pct}%"></i></div>
-      <span class="hint">Nadie sabe quién falta. Cuando estéis todos, se pasa de fase automáticamente.</span>
+      <div class="bar ${all ? 'ok' : ''}"><i style="width:${pct}%"></i></div>
+      <p class="hint">${all ? t.soon : `En cuanto ${t.last}, ${t.then}. Es anónimo: nadie sabe quién falta.`}</p>
     </div>`;
 }
 function myStatus(b) {
@@ -407,71 +423,89 @@ function myStatus(b) {
   return { done: true, ico: '🎉', text: 'Sesión terminada' };
 }
 
-// ---------- Inicio ----------
+// ---------- Inicio: el próximo almuerzo ----------
+function daysUntil(d) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const x = parseDate(d); x.setHours(0, 0, 0, 0);
+  return Math.round((x - t) / 86400000);
+}
+function relDay(d) {
+  const n = daysUntil(d);
+  return n === 0 ? '¡Es hoy!' : n === 1 ? 'Mañana' : n > 1 ? `Dentro de ${n} días` : n === -1 ? 'Fue ayer' : `Fue hace ${-n} días`;
+}
+function nextHead(s) {
+  const future = daysUntil(s.lunch_date) >= 0;
+  return `
+    <div class="session-head next-head">
+      <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · sesión ${s.number}</div>
+      <h2>${esc(longDate(s.lunch_date))}${s.lunch_time ? ` <span class="when">· ${esc(hhmm(s.lunch_time))}</span>` : ''}</h2>
+      <div class="rel-day">${relDay(s.lunch_date)}</div>
+      ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
+      ${stepper(s.phase)}
+    </div>`;
+}
+function history(past) {
+  return `
+    <div class="section-title"><span class="grow">Histórico de ganadores</span>${past.length ? `<span class="chip">${past.length} ${past.length === 1 ? 'almuerzo' : 'almuerzos'}</span>` : ''}</div>
+    ${past.length ? `<div class="past">
+      ${past.map((s) => `
+        <a class="past-item" href="#/s/${s.id}">
+          <span class="num">${s.number}</span>
+          <span class="grow">
+            <strong>🏆 ${esc(s.winner_name || 'Sin ganador')}</strong>
+            <span class="hint">${esc(longDate(s.lunch_date))} · propuesto por ${esc(s.host_id ? nameOf(s.host_id) : '—')}</span>
+          </span>
+          ${s.host_id ? avatar(person(s.host_id), 'sm') : ''}
+        </a>`).join('')}
+    </div>` : '<div class="card empty" style="padding:20px">Aún no hay almuerzos anteriores. Aquí irá apareciendo el sitio ganador de cada uno.</div>'}`;
+}
+// Secciones de la sesión en curso, en este orden: ranking → tu propuesta → participación
+function activeSections(b) {
+  const phase = b.session.phase;
+  if (phase === 'proposals') return proposalsView(b);
+  if (phase === 'voting') return votingView(b);
+  return ratingView(b);
+}
 function renderHome() {
   const act = activeSession();
   const b = act && state.boards.get(act.id);
   const past = state.sessions.filter((s) => s.phase === 'closed');
   const nextNum = (state.sessions[0]?.number || 0) + 1;
-
-  let hero = '';
-  if (act && b) {
-    const st = myStatus(b);
-    const p = pending(b);
-    hero = `
-      <a class="card session-hero" href="#/s/${act.id}">
-        <div class="eyebrow">Sesión ${act.number} · ${PHASES[phaseIndex(act.phase)].label}</div>
-        <h2>${esc(whenText(act))}</h2>
-        ${act.note ? `<div class="hint">${esc(act.note)}</div>` : ''}
-        ${stepper(act.phase)}
-        <div class="todo ${st.done ? 'done' : ''}">
-          <span class="ico">${st.ico}</span><span class="grow">${st.text}</span>
-          ${st.done ? '' : '<span class="go">Ir →</span>'}
-        </div>
-        <p class="hint" style="margin:10px 2px 0">${p.missing === 0 ? 'Todo el grupo ha participado' : `Faltan ${p.missing} por ${p.verb}`}</p>
-      </a>`;
-  } else if (act) {
-    hero = '<div class="card"><div class="splash" style="min-height:120px"><div class="spinner"></div></div></div>';
-  } else {
-    hero = `
-      <div class="card empty">
-        <div class="big">🍽️</div>
-        <strong>No hay ninguna sesión en marcha</strong>
-        <p class="hint">${isAdmin() ? 'Crea la próxima cuando tengáis fecha.' : 'Cuando el admin cree la próxima, aparecerá aquí.'}</p>
-        ${isAdmin() ? `<button class="btn primary" data-go="#/nueva">${ICON.plus} Crear sesión ${nextNum}</button>` : ''}
-      </div>`;
-  }
-
-  const actions = myBattleActions();
   const openB = state.battles?.stats?.open_battles || 0;
+
+  let top;
+  if (act && b) top = nextHead(b.session) + activeSections(b);
+  else if (act) top = nextHead(act) + '<div class="card"><div class="splash" style="min-height:120px"><div class="spinner"></div></div></div>';
+  else top = `
+    <div class="session-head next-head">
+      <div class="eyebrow">🍽️ Próximo almuerzo</div>
+      <h2>Sin fecha todavía</h2>
+    </div>
+    <div class="card empty">
+      <div class="big">🗓️</div>
+      <strong>No hay ningún almuerzo en marcha</strong>
+      <p class="hint">${isAdmin() ? 'Crea el próximo cuando tengáis fecha: se abrirá el plazo de propuestas para todos.' : 'Cuando el admin ponga fecha al próximo, aparecerá aquí.'}</p>
+      ${isAdmin() ? `<button class="btn primary" data-go="#/nueva">${ICON.plus} Crear sesión ${nextNum}</button>` : ''}
+    </div>`;
+
   $app.innerHTML = `
-    ${topbar('Almuerzos <span>Muy Tochos</span>')}
+    ${topbar()}
     <main>
-      ${actions ? `<a class="card alert-card" href="#/pool"><span class="big">⚔️</span><span class="grow"><strong>${actions === 1 ? 'Tienes 1 batalla esperándote' : `Tienes ${actions} batallas esperándote`}</strong><span class="hint">Toca para jugar</span></span><span class="go">→</span></a>` : ''}
-      ${pushCard('home')}
-      ${hero}
+      ${top}
+      ${history(past)}
       ${openB ? `<a class="salseo-line" href="#/pool">⚔️ <span class="grow">${openB === 1 ? 'Hay 1 batalla por jugar' : `Hay ${openB} batallas por jugar`} en el grupo</span><span class="hint">${state.battles.stats.fighters} en liza</span></a>` : ''}
-      ${past.length ? `
-        <div class="section-title">Sesiones anteriores</div>
-        <div class="past">
-          ${past.map((s) => `
-            <a class="past-item" href="#/s/${s.id}">
-              <span class="num">${s.number}</span>
-              <span class="grow">
-                <strong>🏆 ${esc(s.winner_name || 'Sin ganador')}</strong>
-                <span class="hint">${esc(shortDate(s.lunch_date))} · propuesto por ${esc(s.host_id ? nameOf(s.host_id) : '—')}</span>
-              </span>
-              ${s.host_id ? avatar(person(s.host_id), 'sm') : ''}
-            </a>`).join('')}
-        </div>` : ''}
+      ${pushCard('home')}
+      ${isAdmin() && b ? adminBox(b) : ''}
     </main>
     ${tabbar('home')}`;
   bindCommon();
   bindPushCard();
+  if (b) bindSession(b);
 }
 
-// ---------- Sesión ----------
+// ---------- Sesión (las anteriores; la que está en marcha se ve en Inicio) ----------
 function renderSession(id) {
+  if (activeSession()?.id === id) return renderHome();
   const s = state.sessions.find((x) => x.id === id);
   if (!s) {
     $app.innerHTML = `${topbar('Sesión', true)}<main><div class="empty"><div class="big">🫥</div>Esta sesión no existe.</div></main>${tabbar('home')}`;
@@ -485,23 +519,16 @@ function renderSession(id) {
     ensureBoard(id);
     return;
   }
-
-  const phase = b.session.phase;
-  const body = phase === 'proposals' ? proposalsView(b)
-    : phase === 'voting' ? votingView(b)
-    : phase === 'rating' ? ratingView(b)
-    : closedView(b);
-
   $app.innerHTML = `
     ${topbar(`Sesión ${b.session.number}`, true)}
     <main>
       <div class="session-head">
-        <div class="eyebrow">${PHASES[phaseIndex(phase)].emoji} ${PHASES[phaseIndex(phase)].label}${phase !== 'closed' ? ' · <span class="live">en directo</span>' : ''}</div>
+        <div class="eyebrow">🎉 Almuerzo terminado</div>
         <h2>${esc(whenText(b.session))}</h2>
         ${b.session.note ? `<p class="note">${linkify(b.session.note)}</p>` : ''}
-        ${stepper(phase)}
+        ${stepper(b.session.phase)}
       </div>
-      ${body}
+      ${closedView(b)}
       ${isAdmin() ? adminBox(b) : ''}
     </main>
     ${tabbar('home')}`;
@@ -516,6 +543,24 @@ function proposalsView(b) {
   const showForm = !mp || d.editing;
   const pool = state.pool;
   if (d.placeId && !pool.some((p) => p.id === d.placeId && !p.battle_id)) d.placeId = null;
+  const n = b.proposals.length;
+  const ranking = `
+    <div class="block-head">
+      <h3>Ranking de sitios para el próximo almuerzo</h3>
+      <div class="sub"><span class="chip">🤫 anónimo</span><span>${n} ${n === 1 ? 'sitio propuesto' : 'sitios propuestos'} · aún sin votos</span></div>
+    </div>
+    ${n ? '<p class="hint block-hint">El orden saldrá de la votación, que empieza cuando todos hayáis propuesto. Desliza las fotos y toca un sitio para ver su web y su carta.</p>' : ''}
+    ${n ? `<ul class="tiles">
+      ${b.proposals.map((p) => `
+        <li class="place-tile ${p.mine ? 'mine' : ''}">
+          ${carousel(p.place_id, p.name, { ctx: 'g' })}
+          <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
+            <span class="name">${esc(p.name)}</span>
+            ${placeDesc(p.place_id)}
+            <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="chip" title="Solo tú lo sabes">🤫 Tuya</span>' : ''}</span>
+          </div>
+        </li>`).join('')}
+    </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
   const form = `
     <form class="card" id="prop-form" novalidate>
       <span class="field-label">${mp ? 'Cambia tu propuesta' : 'Elige tu propuesta de tu pool'}</span>
@@ -540,7 +585,6 @@ function proposalsView(b) {
     </form>`;
   const mine = mp ? `
     <div class="card">
-      <div class="section-title" style="margin-top:0">Tu propuesta</div>
       <div class="mine-row place-card" ${openAttrs(mp.place_id, mp.name)}>
         ${thumb(mp.place_id)}
         <span class="body">
@@ -555,22 +599,10 @@ function proposalsView(b) {
     </div>` : '';
 
   return `
+    ${ranking}
+    <div class="section-title">Tu propuesta</div>
     ${showForm ? form : mine}
-    <div class="section-title" style="margin-top:20px"></div>
-    ${counter(b)}
-    <div class="section-title"><span class="grow">Pool general · ${b.proposals.length} ${b.proposals.length === 1 ? 'sitio' : 'sitios'}</span><span class="chip">anónimo</span></div>
-    ${b.proposals.length ? '<p class="hint" style="margin:-4px 4px 10px">Desliza las fotos ← y toca un sitio para ver su web y su carta.</p>' : ''}
-    ${b.proposals.length ? `<ul class="tiles">
-      ${b.proposals.map((p) => `
-        <li class="place-tile ${p.mine ? 'mine' : ''}">
-          ${carousel(p.place_id, p.name, { ctx: 'g' })}
-          <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
-            <span class="name">${esc(p.name)}</span>
-            ${placeDesc(p.place_id)}
-            <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="chip" title="Solo tú lo sabes">🤫 Tuya</span>' : ''}</span>
-          </div>
-        </li>`).join('')}
-    </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
+    ${counter(b)}`;
 }
 
 function votingView(b) {
@@ -579,15 +611,13 @@ function votingView(b) {
   const now = Date.now();
   const voted = b.my_vote;
   const votedName = voted && b.proposals.find((p) => p.id === voted)?.name;
+  const mp = b.my_proposal || b.proposals.find((p) => p.mine);
   return `
-    <div class="card" style="margin-top:14px">
-      ${voted
-        ? `<strong>✅ Has votado «${esc(votedName)}»</strong><p class="hint" style="margin:4px 0 0">Tu voto es secreto y definitivo. Mira cómo se mueve la lista.</p>`
-        : `<strong>¿Dónde quieres almorzar?</strong><p class="hint" style="margin:4px 0 0">Un solo voto, secreto y definitivo. No puedes votar tu propia propuesta.</p>`}
+    <div class="block-head">
+      <h3>Ranking de sitios para el próximo almuerzo</h3>
+      <div class="sub"><span class="live">en directo</span><span>ordenado por votos</span></div>
     </div>
-    <div class="section-title" style="margin-top:20px"></div>
-    ${counter(b)}
-    <div class="section-title"><span class="grow">Clasificación en directo</span><span class="live">en directo</span></div>
+    <p class="hint block-hint">Nadie ve cuántos votos tiene cada sitio, solo cómo se mueven. Un voto por persona, secreto y definitivo. Toca un sitio para ver su web y su carta.</p>
     <ul class="tiles">
       ${b.proposals.map((p, i) => {
         const m = mv[p.id] && mv[p.id].until > now ? mv[p.id] : null;
@@ -607,7 +637,18 @@ function votingView(b) {
           </li>`;
       }).join('')}
     </ul>
-    <p class="hint center" style="margin-top:12px">La lista se ordena por votos, pero nadie ve cuántos tiene cada sitio. Desliza las fotos y toca un sitio para ver su web y su carta.</p>`;
+    <div class="section-title">Tu propuesta</div>
+    <div class="card">
+      ${mp ? `
+        <div class="mine-row place-card" ${openAttrs(mp.place_id, mp.name)}>
+          ${thumb(mp.place_id, '🍽️', 'sm')}
+          <span class="body"><span class="name" style="font:800 17px/1.2 var(--display)">${esc(mp.name)}</span><span class="hint">No puedes votar tu propia propuesta</span></span>
+        </div>` : '<p class="hint" style="margin:0">No propusiste ningún sitio para este almuerzo.</p>'}
+      <div class="vote-status ${voted ? 'ok' : ''}">${voted
+        ? `✅ Has votado <b>«${esc(votedName)}»</b>. Tu voto es secreto y definitivo.`
+        : '🗳️ <b>Te falta votar.</b> Elige tu favorito en el ranking de arriba.'}</div>
+    </div>
+    ${counter(b)}`;
 }
 
 function ratingView(b) {
@@ -626,8 +667,6 @@ function ratingView(b) {
       ${b.session.winner_by_draw ? '<span class="chip gold">Empate resuelto por sorteo 🎲</span>' : ''}
       <div class="mystery">🤫 ¿Quién lo propuso? Se desvelará cuando todo el grupo haya puntuado.</div>
     </div>
-    <div class="section-title" style="margin-top:20px"></div>
-    ${counter(b)}
     <div class="section-title"><span class="grow">${b.my_ratings ? 'Tu puntuación (puedes corregirla)' : 'Puntúa el almuerzo'}</span></div>
     <form class="card" id="rate-form" novalidate>
       ${cats.map((c) => `
@@ -647,7 +686,8 @@ function ratingView(b) {
       <button class="btn primary block" type="submit" ${complete ? '' : 'disabled'}>
         ${b.my_ratings ? 'Actualizar mi puntuación' : complete ? 'Enviar puntuación' : `Te faltan ${cats.length - vals.length} categorías`}
       </button>
-    </form>`;
+    </form>
+    ${counter(b)}`;
 }
 
 function closedView(b) {
