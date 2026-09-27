@@ -214,7 +214,7 @@ export function pickPlace(key, { title = 'Añadir un sitio', button = 'Añadir a
 // ---------- Carrusel de fotos (se desliza con el dedo) ----------
 export function carouselHTML(photos, { fallback = '🍽️', extra = '', attrs = '' } = {}) {
   const list = photos || [];
-  return `<div class="carousel" ${attrs}>
+  return `<div class="carousel ${list.length > 1 ? 'multi' : 'single'}" ${attrs}>
     <div class="car-track">${list.length
       ? list.map((ph, i) => `<div class="car-slide"><img src="${esc(ph.url)}" alt="" ${i ? 'loading="lazy"' : ''} decoding="async" draggable="false"></div>`).join('')
       : `<div class="car-slide car-empty"><span>${fallback}</span></div>`}</div>
@@ -230,7 +230,11 @@ export function bindCarousel(el, photos) {
   const track = el.querySelector('.car-track');
   const dots = [...el.querySelectorAll('.car-dots i')];
   const attr = el.querySelector('.car-attr');
-  const idx = () => Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  const step = () => {
+    const sl = track.children;
+    return sl.length > 1 ? Math.max(1, sl[1].offsetLeft - sl[0].offsetLeft) : Math.max(1, track.clientWidth);
+  };
+  const idx = () => Math.min(track.children.length - 1, Math.round(track.scrollLeft / step()));
   const update = () => {
     const i = idx();
     dots.forEach((d, k) => d.classList.toggle('on', k === i));
@@ -241,7 +245,7 @@ export function bindCarousel(el, photos) {
   track.addEventListener('scroll', update, { passive: true });
   el.querySelectorAll('.car-nav').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    track.scrollBy({ left: (b.classList.contains('next') ? 1 : -1) * track.clientWidth, behavior: 'smooth' });
+    track.scrollBy({ left: (b.classList.contains('next') ? 1 : -1) * step(), behavior: 'smooth' });
   }));
   el._update = update;
 }

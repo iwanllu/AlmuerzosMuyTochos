@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
-import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=7';
-import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError, carouselHTML, bindCarousel } from './maps.js?v=7';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=8';
+import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError, carouselHTML, bindCarousel } from './maps.js?v=8';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
@@ -559,14 +559,14 @@ function proposalsView(b) {
     <div class="section-title" style="margin-top:20px"></div>
     ${counter(b)}
     <div class="section-title"><span class="grow">Pool general · ${b.proposals.length} ${b.proposals.length === 1 ? 'sitio' : 'sitios'}</span><span class="chip">anónimo</span></div>
-    ${b.proposals.length ? '<p class="hint" style="margin:-4px 4px 10px">Desliza las fotos y toca un sitio para ver su web y su carta.</p>' : ''}
+    ${b.proposals.length ? '<p class="hint" style="margin:-4px 4px 10px">Desliza las fotos ← y toca un sitio para ver su web y su carta.</p>' : ''}
     ${b.proposals.length ? `<ul class="tiles">
       ${b.proposals.map((p) => `
         <li class="place-tile ${p.mine ? 'mine' : ''}">
           ${carousel(p.place_id, p.name, { ctx: 'g' })}
           <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
-            <span class="grow"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">Tu propuesta · solo tú lo sabes</span>' : ''}</span>
-            <span class="open-hint">Web y carta ↗</span>
+            <span class="name">${esc(p.name)}</span>
+            <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="chip" title="Solo tú lo sabes">🤫 Tuya</span>' : ''}</span>
           </div>
         </li>`).join('')}
     </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
@@ -597,10 +597,10 @@ function votingView(b) {
         else if (!voted) action = `<button class="btn primary small" data-vote="${p.id}" data-name="${esc(p.name)}">Votar</button>`;
         return `
           <li data-flip="p${p.id}" class="place-tile rank-tile ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}">
-            ${carousel(p.place_id, p.name, { ctx: 'v', extra: `<span class="car-pos ${i === 0 ? 'first' : ''}">${i + 1}</span>${m ? `<span class="car-move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲ sube' : '▼ baja'}</span>` : ''}` })}
+            ${carousel(p.place_id, p.name, { ctx: 'v', extra: `<span class="car-pos ${i === 0 ? 'first' : ''}">${i + 1}</span>${m ? `<span class="car-move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲' : '▼'}</span>` : ''}` })}
             <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
-              <span class="grow"><span class="name">${esc(p.name)}</span><span class="open-hint">Web y carta ↗</span></span>
-              ${action}
+              <span class="name">${esc(p.name)}</span>
+              <span class="foot-row"><span class="open-hint">${action ? 'Web ↗' : 'Web y carta ↗'}</span>${action}</span>
             </div>
           </li>`;
       }).join('')}
@@ -1311,11 +1311,8 @@ function renderPool() {
           <li class="place-tile">
             ${carousel(p.place_id, p.name, { ctx: 'p', fallback: p.battle_id ? '⚔️' : '🍽️' })}
             <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
-              <span class="grow">
-                <span class="name">${esc(p.name)}</span>
-                ${p.battle_id ? '<span class="hint">⚔️ En batalla: no se puede proponer hasta que la ganes</span>' : p.proposed ? '<span class="hint">✅ Propuesto en la sesión actual</span>' : ''}
-              </span>
-              ${!p.battle_id && !p.proposed ? `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>` : ''}
+              <span class="name">${esc(p.name)}</span>
+              <span class="foot-row"><span class="open-hint">Web ↗</span>${p.battle_id ? '<span class="chip">⚔️ En batalla</span>' : p.proposed ? '<span class="chip">✅ Propuesto</span>' : `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>`}</span>
             </div>
           </li>`).join('')}
       </ul>` : '<div class="card empty" style="margin-top:12px;padding:24px">Tu pool está vacío. Añade los sitios que te gustaría proponer.</div>'}
