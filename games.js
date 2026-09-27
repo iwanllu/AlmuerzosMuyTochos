@@ -568,12 +568,12 @@ export function gameScreen(html, buttons) {
 }
 
 // Juega una partida y devuelve { score, summary }
-export function runGame(game, seed, { attempt = 1 } = {}) {
+export function runGame(game, seed, { attempt = 1, label = null } = {}) {
   const def = GAMES[game];
   const el = overlay();
   el.innerHTML = `
     <div class="game-top">
-      <span class="game-name">${def.emoji} ${def.name} <small>· intento ${attempt}/3</small></span>
+      <span class="game-name">${def.emoji} ${def.name} <small>· ${label || `intento ${attempt}/3`}</small></span>
       <button class="game-quit" aria-label="Terminar">Terminar</button>
     </div>
     <div class="game-stage"><canvas></canvas><div class="game-count"></div></div>`;
@@ -654,7 +654,7 @@ export function runGame(game, seed, { attempt = 1 } = {}) {
 // ---------------------------------------------------------------------------
 // 🎰 Ruleta: gira hasta el minijuego que ha decidido el servidor
 // ---------------------------------------------------------------------------
-export function rouletteScreen(placeName, rivals) {
+export function rouletteScreen(placeName, rivals, { practice = false } = {}) {
   const el = overlay();
   const seg = GAME_ORDER.map((k, i) => {
     const a0 = (i * 90 - 90) * Math.PI / 180, a1 = ((i + 1) * 90 - 90) * Math.PI / 180, mid = (i * 90 + 45 - 90) * Math.PI / 180;
@@ -664,9 +664,11 @@ export function rouletteScreen(placeName, rivals) {
   }).join('');
   el.innerHTML = `
     <div class="game-screen roulette">
-      <div class="eyebrow">⚔️ Batalla por «${placeName.replace(/[<>&"]/g, '')}»</div>
+      ${practice
+        ? `<div class="eyebrow">🎮 Modo entrenamiento</div><h2>¿A qué jugamos?</h2><p class="muted">Aquí no cuenta nada: practica todo lo que quieras.</p>`
+        : `<div class="eyebrow">⚔️ Batalla por «${placeName.replace(/[<>&"]/g, '')}»</div>
       <h2>Contra ${rivals} ${rivals === 1 ? 'rival' : 'rivales'}</h2>
-      <p class="muted">Gira la ruleta para elegir el minijuego.</p>
+      <p class="muted">Gira la ruleta para elegir el minijuego.</p>`}
       <div class="wheel-wrap">
         <div class="wheel-pointer">▼</div>
         <svg class="wheel" viewBox="0 0 300 300" width="280" height="280" aria-hidden="true">${seg}

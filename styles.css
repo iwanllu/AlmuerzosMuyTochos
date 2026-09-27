@@ -426,3 +426,15 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .icon-btn.small { width: 34px; height: 34px; }
 .icon-btn.small svg { width: 18px; height: 18px; }
 .pool-item { align-items: center; }
+
+/* ---------- Modo entrenamiento ---------- */
+.practice { margin-top: 12px; }
+.practice p { margin: 4px 0 12px; }
+.practice-games { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.practice-game {
+  display: grid; justify-items: center; gap: 2px; padding: 12px 6px; border-radius: 14px;
+  border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; font-size: 13px; text-align: center;
+}
+.practice-game span { font-size: 28px; line-height: 1.1; }
+.practice-game small { font-weight: 600; color: var(--muted); font-size: 11px; }
+.practice-game:active { transform: scale(.97); }

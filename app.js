@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
-import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=3';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=4';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
@@ -1280,6 +1280,14 @@ function renderPool() {
     ${topbar('Mi pool')}
     <main>
       ${salseoCard(B.stats)}
+      <div class="card practice">
+        <strong>🎮 Entrena los minijuegos</strong>
+        <p class="hint">Practica sin que cuente nada. Gira la ruleta o elige juego.</p>
+        <div class="practice-games">
+          ${Object.entries(GAMES).map(([k, g]) => `<button class="practice-game" data-practice="${k}"><span>${g.emoji}</span>${esc(g.name)}${practiceBest(k) !== null ? `<small>Récord: ${practiceBest(k)}</small>` : ''}</button>`).join('')}
+        </div>
+        <button class="btn primary block" data-practice-spin>🎰 Girar la ruleta</button>
+      </div>
       ${open.length ? `<div class="section-title">Mis batallas</div><div class="stack-gap">${open.map(battleCard).join('')}</div>` : ''}
       <div class="section-title"><span class="grow">Mi pool privado · ${state.pool.length}</span><span class="chip">solo lo ves tú</span></div>
       <form class="card" id="pool-form" novalidate>
@@ -1336,6 +1344,8 @@ function renderPool() {
     }
   }));
   $app.querySelectorAll('[data-spin]').forEach((b) => (b.onclick = () => spinFlow(Number(b.dataset.spin))));
+  $app.querySelectorAll('[data-practice]').forEach((b) => (b.onclick = () => practiceFlow(b.dataset.practice)));
+  $app.querySelector('[data-practice-spin]').onclick = () => practiceFlow(null);
   $app.querySelectorAll('[data-play]').forEach((b) => (b.onclick = () => playFlow(Number(b.dataset.play))));
   $app.querySelectorAll('[data-stop]').forEach((b) => (b.onclick = async () => {
     const bt = battleById(Number(b.dataset.stop));
@@ -1354,6 +1364,60 @@ function renderPool() {
       call('admin_force_battle', { p_battle: Number(b.dataset.force) }, 'Hecho');
     }
   }));
+}
+
+
+// ---------------------------------------------------------------------------
+// Modo entrenamiento (no toca el servidor; récord personal en este móvil)
+// ---------------------------------------------------------------------------
+function practiceBest(game) {
+  const v = lsGet(`almuerzos-best-${game}`);
+  return v === null ? null : Number(v);
+}
+async function practiceFlow(game) {
+  if (!game) {
+    const rl = rouletteScreen('', 0, { practice: true });
+    const spun = await new Promise((resolve) => {
+      rl.onLater(() => resolve(null));
+      rl.onSpin(async () => {
+        rl.setBusy(true);
+        const g = Object.keys(GAMES)[Math.floor(Math.random() * Object.keys(GAMES).length)];
+        await rl.land(g);
+        await sleep(800);
+        resolve(g);
+      });
+    });
+    if (!spun) { closeOverlay(); render(); return; }
+    game = spun;
+  }
+  let round = 1;
+  for (;;) {
+    const g = GAMES[game];
+    const best = practiceBest(game);
+    const go = await gameScreen(`
+      <div class="big">${g.emoji}</div>
+      <div class="eyebrow">🎮 Entrenamiento</div>
+      <h2>${g.name}</h2>
+      <p>${g.how}</p>
+      ${best !== null ? `<div><span class="pill">Tu récord: ${best}</span></div>` : ''}
+      <p class="muted">En una batalla de verdad tendrás 3 intentos y cuenta el mejor.</p>`,
+    [{ label: '¡Empezar!', value: true, primary: true }, { label: 'Salir', value: false }]);
+    if (!go) break;
+    const res = await runGame(game, Math.floor(Math.random() * 2147483646) + 1, { label: `entrenamiento ${round}` });
+    const record = best === null || res.score > best;
+    if (record) lsSet(`almuerzos-best-${game}`, String(res.score));
+    const next = await gameScreen(`
+      <div class="big">${record && res.score > 0 ? '🏅' : g.emoji}</div>
+      <h2 class="score-big">${res.score} puntos</h2>
+      <p>${esc(res.summary)}</p>
+      <div><span class="pill">${record ? (best === null ? 'Primer récord' : '¡Nuevo récord!') : `Récord: ${best}`}</span></div>`,
+    [{ label: 'Otra vez', value: 'again', primary: true }, { label: '🎰 Otro juego', value: 'spin' }, { label: 'Salir', value: 'exit' }]);
+    if (next === 'again') { round++; continue; }
+    if (next === 'spin') { closeOverlay(); return practiceFlow(null); }
+    break;
+  }
+  closeOverlay();
+  render();
 }
 
 // ---------------------------------------------------------------------------
