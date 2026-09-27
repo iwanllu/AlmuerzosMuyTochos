@@ -1,5 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
-import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=5';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=6';
+import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError } from './maps.js?v=6';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
@@ -24,6 +25,7 @@ const state = {
   pool: [],               // mi pool privado (my_pool)
   battles: null,          // mis batallas + contador del grupo (my_battles)
   pushOn: false,
+  mapsKey: null,          // clave de navegador de Google Maps (la pone el admin)
   drafts: { proposal: {}, rating: {}, newSession: null, pool: { name: '', note: '' } },
 };
 
@@ -134,15 +136,17 @@ const activeSession = () => state.sessions.find((s) => s.phase !== 'closed');
 const isAdmin = () => !!state.me?.is_admin;
 
 async function loadAll() {
-  const [pr, se, lg, po, bt] = await Promise.all([
+  const [pr, se, lg, po, bt, cf] = await Promise.all([
     sb.from('profiles').select('id, username, display_name, avatar_url, is_admin'),
     sb.from('sessions').select(SESSION_COLS).order('number', { ascending: false }),
     sb.rpc('get_league'),
     sb.rpc('my_pool'),
     sb.rpc('my_battles'),
+    sb.from('app_config').select('maps_key').eq('id', 1),
   ]);
   const err = pr.error || se.error || lg.error || po.error || bt.error;
   if (err) throw err;
+  state.mapsKey = (!cf.error && cf.data?.[0]?.maps_key) || null;
   state.pool = po.data || [];
   detectBattleEvents(state.battles, bt.data);
   state.battles = bt.data;
@@ -203,7 +207,7 @@ async function ensureBoard(id) {
 function subscribe() {
   if (state.channel) return;
   state.channel = sb.channel('almuerzos-live');
-  for (const table of ['sessions', 'league', 'profiles', 'rating_categories', 'battle_stats']) {
+  for (const table of ['sessions', 'league', 'profiles', 'rating_categories', 'battle_stats', 'app_config']) {
     state.channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => scheduleReload());
   }
   state.channel.subscribe();
@@ -301,6 +305,7 @@ function render() {
   else if (r.name === 'new' && isAdmin()) renderNew();
   else renderHome();
   restoreLayout(layout);
+  hydratePlaces();
 }
 
 function renderLogin() {
@@ -509,17 +514,13 @@ function proposalsView(b) {
         ${pool.map((p) => `
           <label class="pick ${p.battle_id ? 'disabled' : ''} ${d.placeId === p.id ? 'on' : ''}">
             <input type="radio" name="place" value="${p.id}" ${d.placeId === p.id ? 'checked' : ''} ${p.battle_id ? 'disabled' : ''}>
+            ${thumb(p.place_id, '🍽️', 'sm')}
             <span class="body"><span class="name">${esc(p.name)}</span>${p.note ? `<span class="note">${esc(p.note)}</span>` : ''}</span>
             ${p.battle_id ? '<span class="chip accent">⚔️ en batalla</span>' : ''}
           </label>`).join('')}
       </div>` : '<p class="hint">Tu pool está vacío: añade un sitio para poder proponerlo.</p>'}
       <div class="add-inline">
-        ${d.adding ? `
-          <div class="field"><input class="input" id="add-name" maxlength="80" placeholder="Nombre del bar o restaurante" value="${esc(d.name)}" autocomplete="off"></div>
-          <div class="field"><input class="input" id="add-note" maxlength="200" placeholder="Comentario o enlace de Maps (opcional)" value="${esc(d.note)}" autocomplete="off"></div>
-          <div class="btn-row"><button type="button" class="btn ghost small" id="add-cancel">Cancelar</button><button type="button" class="btn primary small" id="add-go">Añadir a mi pool</button></div>
-          <p class="hint" style="margin:8px 0 0">⚔️ Si alguien ya lo tiene en su pool, se abrirá una batalla.</p>`
-        : `<button type="button" class="btn ghost small" id="add-open">${ICON.plus} Añadir un sitio nuevo a mi pool</button>`}
+        <button type="button" class="btn ghost small" id="add-open">🔎 Buscar otro sitio en Google Maps</button>
       </div>
       <div class="error-text" id="prop-error" role="alert"></div>
       <div class="btn-row">
@@ -531,8 +532,14 @@ function proposalsView(b) {
   const mine = mp ? `
     <div class="card">
       <div class="section-title" style="margin-top:0">Tu propuesta</div>
-      <div style="font:800 20px/1.2 var(--display)">${esc(mp.name)}</div>
-      ${mp.note ? `<p class="hint" style="margin:4px 0 0">${linkify(mp.note)}</p>` : ''}
+      <div class="mine-row place-card" ${openAttrs(mp.place_id, mp.name)}>
+        ${thumb(mp.place_id)}
+        <span class="body">
+          <span style="font:800 20px/1.2 var(--display)">${esc(mp.name)}</span>
+          ${addrLine(mp.place_id)}
+          ${mp.note ? `<span class="hint">${linkify(mp.note)}</span>` : ''}
+        </span>
+      </div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn ghost small" id="prop-edit">Cambiar</button>
         <button class="btn danger small" id="prop-withdraw">Retirar</button>
@@ -544,14 +551,18 @@ function proposalsView(b) {
     <div class="section-title" style="margin-top:20px"></div>
     ${counter(b)}
     <div class="section-title"><span class="grow">Pool general · ${b.proposals.length} ${b.proposals.length === 1 ? 'sitio' : 'sitios'}</span><span class="chip">anónimo</span></div>
+    ${b.proposals.length ? '<p class="hint" style="margin:-4px 4px 10px">Toca un sitio para ver su web y su carta.</p>' : ''}
     ${b.proposals.length ? `<ul class="pool">
       ${b.proposals.map((p) => `
-        <li class="pool-item ${p.mine ? 'mine' : ''}">
-          <span class="ico">🍽️</span>
+        <li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>
+          ${thumb(p.place_id)}
           <span class="body">
             <span class="name">${esc(p.name)}</span>
+            ${addrLine(p.place_id)}
             ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
             ${p.mine ? '<span class="hint">Tu propuesta · solo tú lo sabes</span>' : ''}
+            <span class="open-hint">Ver web y carta ↗</span>
+            ${attrLine(p.place_id)}
           </span>
         </li>`).join('')}
     </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
@@ -582,11 +593,13 @@ function votingView(b) {
         else if (!voted) action = `<button class="btn primary small" data-vote="${p.id}" data-name="${esc(p.name)}">Votar</button>`;
         return `
           <li data-flip="p${p.id}">
-            <div class="rank-item ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}">
+            <div class="rank-item place-card ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>
               <span class="pos">${i + 1}</span>
+              ${thumb(p.place_id, '🍽️', 'sm')}
               <span class="body">
                 <span class="name">${esc(p.name)}</span>
                 ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
+                <span class="open-hint">Web y carta ↗</span>
               </span>
               ${m ? `<span class="move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲' : '▼'}</span>` : ''}
               ${action}
@@ -594,7 +607,7 @@ function votingView(b) {
           </li>`;
       }).join('')}
     </ul>
-    <p class="hint center" style="margin-top:12px">La lista se ordena por votos, pero nadie ve cuántos tiene cada sitio.</p>`;
+    <p class="hint center" style="margin-top:12px">La lista se ordena por votos, pero nadie ve cuántos tiene cada sitio. Toca un sitio para ver su web y su carta.</p>`;
 }
 
 function ratingView(b) {
@@ -606,6 +619,7 @@ function ratingView(b) {
   const avg = vals.length ? vals.reduce((a, x) => a + x, 0) / vals.length : null;
   return `
     <div class="card winner-card" style="margin-top:14px">
+      ${winnerPhoto(b)}
       <div class="trophy">🏆</div>
       <div class="label">Sitio ganador</div>
       <h3>${esc(b.session.winner_name)}</h3>
@@ -643,6 +657,7 @@ function closedView(b) {
   const cats = b.categories;
   return `
     <div class="card winner-card" style="margin-top:14px">
+      ${winnerPhoto(b)}
       <div class="trophy">🏆</div>
       <div class="label">Sitio ganador</div>
       <h3>${esc(s.winner_name || 'Sin ganador')}</h3>
@@ -667,7 +682,7 @@ function closedView(b) {
     ${others.length ? `
       <div class="section-title"><span class="grow">Resto de propuestas</span><span class="chip">anónimas</span></div>
       <ul class="pool">
-        ${others.map((p) => `<li class="pool-item ${p.mine ? 'mine' : ''}"><span class="ico">🍽️</span><span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">La tuya</span>' : ''}</span></li>`).join('')}
+        ${others.map((p) => `<li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>${thumb(p.place_id, '🍽️', 'sm')}<span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">La tuya</span>' : ''}${attrLine(p.place_id)}</span></li>`).join('')}
       </ul>` : ''}`;
 }
 
@@ -704,24 +719,10 @@ function bindSession(b) {
       f.querySelectorAll('input[name=place]').forEach((r) => (r.onchange = () => { d.placeId = Number(r.value); render(); }));
       const cancel = f.querySelector('#prop-cancel');
       if (cancel) cancel.onclick = () => { d.editing = false; render(); };
-      const open = f.querySelector('#add-open');
-      if (open) open.onclick = () => { d.adding = true; render(); document.getElementById('add-name')?.focus(); };
-      const addName = f.querySelector('#add-name'), addNote = f.querySelector('#add-note');
-      if (addName) {
-        addName.oninput = () => (d.name = addName.value);
-        addNote.oninput = () => (d.note = addNote.value);
-        const doAdd = async () => {
-          if (d.name.trim().length < 2) { document.getElementById('prop-error').textContent = 'Escribe el nombre del sitio'; return; }
-          const res = await addPlace(d.name, d.note);
-          if (!res) return;
-          Object.assign(d, { adding: false, name: '', note: '' });
-          if (res.result === 'added') d.placeId = res.place_id;
-          render();
-        };
-        [addName, addNote].forEach((el) => (el.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } }));
-        f.querySelector('#add-go').onclick = doAdd;
-        f.querySelector('#add-cancel').onclick = () => { Object.assign(d, { adding: false, name: '', note: '' }); render(); };
-      }
+      f.querySelector('#add-open').onclick = async () => {
+        const res = await searchAndAdd();
+        if (res?.result === 'added') { d.placeId = res.pool_id; render(); }
+      };
       f.onsubmit = async (e) => {
         e.preventDefault();
         if (!d.placeId) return;
@@ -1003,6 +1004,7 @@ function renderProfile() {
         </div>
         <button class="btn primary block" type="submit">Guardar</button>
       </form>
+      ${isAdmin() ? mapsAdminCard() : ''}
       <div class="section-title">Avisos en este dispositivo</div>
       ${pushSettings()}
       <div class="section-title">El grupo · ${state.profiles.size}</div>
@@ -1014,6 +1016,7 @@ function renderProfile() {
     ${tabbar('profile')}`;
   bindCommon();
   bindPushCard();
+  bindMapsAdmin();
 
   const file = document.getElementById('file');
   document.getElementById('photo').onclick = () => file.click();
@@ -1114,8 +1117,19 @@ function updateAppBadge() {
   } catch { /* no disponible */ }
 }
 
-async function addPlace(name, note) {
-  const { data, error } = await sb.rpc('add_to_pool', { p_name: name, p_note: note || null });
+// Buscar en Google Maps y añadir al pool
+async function searchAndAdd() {
+  if (!state.mapsKey) {
+    toast(isAdmin() ? 'Primero configura Google Maps en Perfil' : 'Google Maps aún no está configurado: avisa al admin', true);
+    return null;
+  }
+  const picked = await pickPlace(state.mapsKey);
+  if (!picked) return null;
+  return addPlace(picked.name, picked.note, picked.place_id);
+}
+
+async function addPlace(name, note, placeId = null) {
+  const { data, error } = await sb.rpc('add_to_pool', { p_name: name, p_note: note || null, p_place_id: placeId });
   if (error) { toast(friendlyError(error), true); return null; }
   flushPush();
   await loadAll().catch(() => {});
@@ -1259,7 +1273,7 @@ function battleCard(bt) {
   return `
     <div class="card battle-card ${bt.status} ${bt.result || ''}">
       <div class="bc-head">
-        <span class="bc-game">${g ? g.emoji : '🎰'}</span>
+        ${bt.place_id ? thumb(bt.place_id, g ? g.emoji : '🎰', 'sm') : `<span class="bc-game">${g ? g.emoji : '🎰'}</span>`}
         <span class="grow">
           <strong>«${esc(bt.place_name)}»</strong>
           <span class="hint">${bt.parent_id ? 'Revancha · ' : ''}contra ${rivals} ${rivals === 1 ? 'rival anónimo' : 'rivales anónimos'}${g ? ` · ${g.name}` : ''}</span>
@@ -1275,7 +1289,6 @@ function renderPool() {
   const B = state.battles || { stats: {}, battles: [] };
   const open = B.battles.filter((x) => x.status !== 'resolved');
   const done = B.battles.filter((x) => x.status === 'resolved');
-  const d = state.drafts.pool;
   $app.innerHTML = `
     ${topbar('Mi pool')}
     <main>
@@ -1290,21 +1303,21 @@ function renderPool() {
       </div>
       ${open.length ? `<div class="section-title">Mis batallas</div><div class="stack-gap">${open.map(battleCard).join('')}</div>` : ''}
       <div class="section-title"><span class="grow">Mi pool privado · ${state.pool.length}</span><span class="chip">solo lo ves tú</span></div>
-      <form class="card" id="pool-form" novalidate>
-        <div class="field"><label for="pool-name">Añadir un sitio</label>
-          <input class="input" id="pool-name" maxlength="80" placeholder="Nombre del bar o restaurante" value="${esc(d.name)}" autocomplete="off"></div>
-        <div class="field"><input class="input" id="pool-note" maxlength="200" placeholder="Comentario o enlace de Maps (opcional)" value="${esc(d.note)}" autocomplete="off"></div>
-        <button class="btn primary block" type="submit">${ICON.plus} Añadir a mi pool</button>
-        <p class="hint" style="margin:10px 0 0">⚔️ Si alguien más ya lo tiene en su pool, se abre una batalla y quien la gane se lo queda.</p>
-      </form>
+      <div class="card">
+        ${mapsNotice()}
+        <button class="btn primary block" id="pool-search">🔎 Buscar un sitio en Google Maps</button>
+        <p class="hint" style="margin:10px 0 0">Búscalo, ponle un nombre y se añade a tu pool. ⚔️ Si alguien más ya lo tiene, se abre una batalla y quien la gane se lo queda.</p>
+      </div>
       ${state.pool.length ? `<ul class="pool" style="margin-top:12px">
         ${state.pool.map((p) => `
-          <li class="pool-item">
-            <span class="ico">${p.battle_id ? '⚔️' : '🍽️'}</span>
+          <li class="pool-item place-card" ${openAttrs(p.place_id, p.name)}>
+            ${thumb(p.place_id, p.battle_id ? '⚔️' : '🍽️')}
             <span class="body">
               <span class="name">${esc(p.name)}</span>
+              ${addrLine(p.place_id)}
               ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
-              ${p.battle_id ? '<span class="hint">En batalla: no se puede proponer hasta que la ganes</span>' : p.proposed ? '<span class="hint">✅ Propuesto en la sesión actual</span>' : ''}
+              ${p.battle_id ? '<span class="hint">⚔️ En batalla: no se puede proponer hasta que la ganes</span>' : p.proposed ? '<span class="hint">✅ Propuesto en la sesión actual</span>' : ''}
+              ${attrLine(p.place_id)}
             </span>
             ${!p.battle_id && !p.proposed ? `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>` : ''}
           </li>`).join('')}
@@ -1325,19 +1338,7 @@ function renderPool() {
     ${tabbar('pool')}`;
   bindCommon();
 
-  const f = document.getElementById('pool-form');
-  const nameEl = f.querySelector('#pool-name'), noteEl = f.querySelector('#pool-note');
-  nameEl.oninput = () => (d.name = nameEl.value);
-  noteEl.oninput = () => (d.note = noteEl.value);
-  f.onsubmit = async (e) => {
-    e.preventDefault();
-    if (d.name.trim().length < 2) return toast('Escribe el nombre del sitio', true);
-    const btn = f.querySelector('button[type=submit]');
-    btn.disabled = true;
-    const res = await addPlace(d.name, d.note);
-    btn.disabled = false;
-    if (res) { state.drafts.pool = { name: '', note: '' }; render(); }
-  };
+  document.getElementById('pool-search').onclick = () => searchAndAdd();
   $app.querySelectorAll('[data-remove]').forEach((b) => (b.onclick = async () => {
     if (await confirmSheet({ title: `¿Quitar «${b.dataset.name}»?`, text: 'Lo borrarás de tu pool.', okLabel: 'Quitar', danger: true })) {
       call('remove_from_pool', { p_place: Number(b.dataset.remove) }, 'Quitado de tu pool');
@@ -1366,6 +1367,144 @@ function renderPool() {
   }));
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Sitios de Google Maps: miniaturas, dirección, atribución y web
+// ---------------------------------------------------------------------------
+function thumb(placeId, fallback = '🍽️', size = '') {
+  const info = placeId && state.placeInfo?.get(placeId);
+  const img = info?.photo ? `style="background-image:url('${esc(info.photo)}')"` : '';
+  return `<span class="thumb ${size} ${img ? 'has-photo' : ''}" ${placeId ? `data-thumb="${esc(placeId)}"` : ''} ${img} aria-hidden="true"><span>${fallback}</span></span>`;
+}
+function addrLine(placeId) {
+  if (!placeId) return '';
+  const info = state.placeInfo?.get(placeId);
+  return `<span class="addr" data-addr="${esc(placeId)}">${info?.address ? esc(info.address) : ''}</span>`;
+}
+function attrLine(placeId) {
+  if (!placeId) return '';
+  const info = state.placeInfo?.get(placeId);
+  return `<span class="gattr" data-attr="${esc(placeId)}">${info?.author ? `Foto: ${esc(info.author.name)} · ` : ''}${info ? 'Google Maps' : ''}</span>`;
+}
+function openAttrs(placeId, name) {
+  return placeId ? `data-open="${esc(placeId)}" data-name="${esc(name)}" role="link" tabindex="0"` : `data-open-name="${esc(name)}" role="link" tabindex="0"`;
+}
+function winnerPhoto(b) {
+  const w = b.proposals.find((p) => p.id === b.session.winner_proposal_id);
+  if (!w?.place_id) return '';
+  const info = state.placeInfo?.get(w.place_id);
+  return `<div class="hero-photo ${info?.photo ? 'has-photo' : ''}" data-hero="${esc(w.place_id)}" ${openAttrs(w.place_id, w.name)}
+    ${info?.photo ? `style="background-image:url('${esc(info.photo)}')"` : ''}><span class="hero-link">Web y carta ↗</span></div>
+    ${attrLine(w.place_id)}`;
+}
+function mapsNotice() {
+  if (state.mapsKey) return '';
+  return `<p class="hint" style="margin:0 0 10px">⚠️ Google Maps aún no está configurado. ${isAdmin() ? 'Configúralo en <b>Perfil</b>.' : 'Avisa al admin.'}</p>`;
+}
+
+// Rellena fotos, direcciones y atribuciones de lo que hay en pantalla
+state.placeInfo = new Map();
+function hydratePlaces() {
+  if (!state.mapsKey) return;
+  const ids = new Set();
+  $app.querySelectorAll('[data-thumb],[data-addr],[data-hero],[data-attr]').forEach((el) =>
+    ids.add(el.dataset.thumb || el.dataset.addr || el.dataset.hero || el.dataset.attr));
+  for (const id of ids) {
+    if (state.placeInfo.has(id)) { applyPlaceInfo(id, state.placeInfo.get(id)); continue; }
+    placeInfo(state.mapsKey, id).then((info) => {
+      if (!info) return;
+      state.placeInfo.set(id, info);
+      applyPlaceInfo(id, info);
+    }).catch(() => {});
+  }
+}
+function applyPlaceInfo(id, info) {
+  const sel = (attr) => $app.querySelectorAll(`[${attr}="${CSS.escape(id)}"]`);
+  if (info.photo) {
+    sel('data-thumb').forEach((el) => { el.style.backgroundImage = `url("${info.photo}")`; el.classList.add('has-photo'); });
+    sel('data-hero').forEach((el) => { el.style.backgroundImage = `url("${info.photo}")`; el.classList.add('has-photo'); });
+  }
+  sel('data-addr').forEach((el) => (el.textContent = info.address || ''));
+  sel('data-attr').forEach((el) => (el.textContent = `${info.author ? `Foto: ${info.author.name} · ` : ''}Google Maps`));
+}
+
+// Tocar una tarjeta → web del sitio (o su ficha de Google Maps si no tiene web)
+function openPlace(placeId, name) {
+  if (!placeId) { window.open(mapsSearchURL(name), '_blank', 'noopener'); return; }
+  const known = openPlace.cache.get(placeId);
+  if (known) { window.open(known, '_blank', 'noopener'); return; }
+  // Se abre la pestaña ya (dentro del toque) y se le pone la dirección al saberla
+  const w = window.open('', '_blank');
+  if (w) { try { w.document.title = name || 'Abriendo…'; w.document.body.innerHTML = '<p style="font:16px system-ui;padding:24px">Abriendo la web del sitio…</p>'; } catch { /* distinto origen */ } }
+  placeLinks(state.mapsKey, placeId).then(({ website, maps }) => {
+    const url = website || maps || mapsSearchURL(name);
+    openPlace.cache.set(placeId, url);
+    if (!website) toast('Este sitio no tiene web: te abro su ficha de Google Maps');
+    if (w && !w.closed) w.location.href = url;
+    else placeLinkSheet(name, url, !!website);
+  }).catch(() => {
+    const url = mapsSearchURL(name);
+    if (w && !w.closed) w.location.href = url;
+    else placeLinkSheet(name, url, false);
+  });
+}
+openPlace.cache = new Map();
+function placeLinkSheet(name, url, isWeb) {
+  sheet(`
+    <h3>${esc(name)}</h3>
+    <p>${isWeb ? 'Abre su web para ver la carta.' : 'No tiene web: mira su ficha en Google Maps.'}</p>
+    <div class="btn-col">
+      <a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener" data-close-after>${isWeb ? '🌐 Abrir la web' : '📍 Abrir en Google Maps'}</a>
+      <button class="btn ghost" data-close>Cerrar</button>
+    </div>`, (root, done) => { root.querySelector('[data-close-after]').addEventListener('click', () => setTimeout(() => done(true), 100)); });
+}
+$app.addEventListener('click', (e) => {
+  const card = e.target.closest('[data-open],[data-open-name]');
+  if (!card || e.target.closest('button, a, input, label.pick')) return;
+  openPlace(card.dataset.open || null, card.dataset.name || card.dataset.openName);
+});
+$app.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const card = e.target.closest?.('[data-open],[data-open-name]');
+  if (card && e.target === card) openPlace(card.dataset.open || null, card.dataset.name || card.dataset.openName);
+});
+onMapsAuthError(() => toast('La clave de Google Maps no es válida o no permite esta web', true));
+
+// Admin: clave de Google Maps (la pega el admin; es una clave pública restringida a esta web)
+function mapsAdminCard() {
+  const on = !!state.mapsKey;
+  return `
+    <div class="section-title">Admin · Google Maps</div>
+    <div class="card">
+      <strong>${on ? '✅ Google Maps configurado' : '⚠️ Falta la clave de Google Maps'}</strong>
+      <p class="hint" style="margin:6px 0 12px">Hace falta para buscar sitios, ver sus fotos y abrir su web. Pega aquí la <b>clave de navegador</b> de Google Maps (restringida a esta web).</p>
+      <div class="field" style="margin-bottom:10px">
+        <input class="input" id="maps-key" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
+               placeholder="${on ? 'Pega una clave nueva para cambiarla' : 'AIza…'}">
+      </div>
+      <div class="btn-row">
+        <button class="btn primary small" id="maps-save">Guardar clave</button>
+        ${on ? '<button class="btn ghost small" id="maps-test">Probar buscador</button>' : ''}
+      </div>
+    </div>`;
+}
+function bindMapsAdmin() {
+  const save = document.getElementById('maps-save');
+  if (!save) return;
+  save.onclick = async () => {
+    const v = document.getElementById('maps-key').value.trim();
+    if (!/^[A-Za-z0-9_-]{20,60}$/.test(v)) return toast('Eso no parece una clave de Google Maps', true);
+    const { error } = await sb.from('app_config').update({ maps_key: v, updated_at: new Date().toISOString() }).eq('id', 1);
+    if (error) return toast(friendlyError(error), true);
+    const changed = state.mapsKey && state.mapsKey !== v;
+    state.mapsKey = v;
+    toast(changed ? 'Clave guardada. Cierra y abre la app para usarla' : 'Clave guardada ✅');
+    render();
+  };
+  const test = document.getElementById('maps-test');
+  if (test) test.onclick = () => pickPlace(state.mapsKey, { title: 'Prueba', button: 'Cerrar (es solo una prueba)' });
+}
 
 // ---------------------------------------------------------------------------
 // Modo entrenamiento (no toca el servidor; récord personal en este móvil)

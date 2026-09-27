@@ -438,3 +438,67 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .practice-game span { font-size: 28px; line-height: 1.1; }
 .practice-game small { font-weight: 600; color: var(--muted); font-size: 11px; }
 .practice-game:active { transform: scale(.97); }
+
+/* ---------- Sitios de Google Maps ---------- */
+.place-card { cursor: pointer; }
+.place-card:active { transform: scale(.99); }
+.thumb {
+  width: 64px; height: 64px; border-radius: 12px; flex: none; display: grid; place-items: center;
+  background: var(--surface-2) center / cover no-repeat; font-size: 26px; overflow: hidden;
+}
+.thumb.sm { width: 46px; height: 46px; font-size: 20px; border-radius: 10px; }
+.thumb.has-photo span { display: none; }
+.addr { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.addr:empty { display: none; }
+.gattr { font-size: 10.5px; color: var(--muted); opacity: .8; }
+.gattr:empty { display: none; }
+.open-hint { font-size: 12px; font-weight: 700; color: var(--accent); }
+.pool-item.place-card { align-items: center; }
+.rank-item .thumb { margin-left: -2px; }
+.pick .thumb { margin: -4px 0; }
+.hero-photo {
+  position: relative; height: 170px; margin: -22px -16px 14px; border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface-2) center / cover no-repeat; cursor: pointer;
+}
+.hero-photo:not(.has-photo) { display: none; }
+.hero-link {
+  position: absolute; right: 10px; bottom: 10px; padding: 6px 10px; border-radius: 999px;
+  background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-weight: 700;
+}
+.winner-card > .gattr { display: block; margin: -8px 0 8px; }
+
+/* Buscador con mapa */
+#picker-root:empty { display: none; }
+.picker {
+  position: fixed; inset: 0; z-index: 150; background: var(--bg); display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+}
+.pk-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--surface); box-shadow: var(--shadow); z-index: 3; }
+.pk-close, .pk-locate { width: 42px; height: 42px; border: 0; border-radius: 50%; background: var(--surface-2); font-size: 18px; flex: none; }
+.pk-search { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 14px; padding: 0 12px; min-width: 0; }
+.pk-search input { flex: 1; min-width: 0; border: 0; background: transparent; height: 44px; font-size: 16px; outline: none; }
+.pk-results {
+  position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 66px); z-index: 4;
+  list-style: none; margin: 0; padding: 6px; background: var(--surface); border-radius: 14px; box-shadow: 0 8px 30px rgb(0 0 0 / .18);
+  max-height: 50dvh; overflow: auto;
+}
+.pk-results li { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+.pk-results li:active, .pk-results li:hover { background: var(--surface-2); }
+.pk-results li span { font-size: 13px; color: var(--muted); }
+.pk-results .pk-empty { color: var(--muted); cursor: default; }
+.pk-map { flex: 1; min-height: 200px; position: relative; background: #e9e4dc; }
+.pk-map-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; color: var(--muted); }
+.pk-panel {
+  background: var(--surface); border-radius: 20px 20px 0 0; margin-top: -18px; position: relative; z-index: 2;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 14px); box-shadow: 0 -6px 24px rgb(0 0 0 / .12);
+  max-height: 58dvh; overflow: auto;
+}
+.pk-hint { margin: 2px 0; color: var(--muted); text-align: center; }
+.pk-card { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.pk-photo { width: 96px; height: 76px; border-radius: 12px; object-fit: cover; flex: none; background: var(--surface-2); display: grid; place-items: center; font-size: 30px; }
+.pk-info { display: grid; gap: 3px; min-width: 0; }
+.pk-info strong { font-size: 17px; }
+.pk-panel .field { margin-bottom: 10px; }
+
+.mine-row { display: flex; align-items: center; gap: 12px; }
+.mine-row .body { display: grid; gap: 2px; min-width: 0; }
