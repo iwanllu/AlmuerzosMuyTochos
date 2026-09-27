@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
-import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=8';
-import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError, carouselHTML, bindCarousel } from './maps.js?v=8';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=9';
+import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError, carouselHTML, bindCarousel, descHTML } from './maps.js?v=9';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
@@ -566,6 +566,7 @@ function proposalsView(b) {
           ${carousel(p.place_id, p.name, { ctx: 'g' })}
           <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
             <span class="name">${esc(p.name)}</span>
+            ${placeDesc(p.place_id)}
             <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="chip" title="Solo tú lo sabes">🤫 Tuya</span>' : ''}</span>
           </div>
         </li>`).join('')}
@@ -600,6 +601,7 @@ function votingView(b) {
             ${carousel(p.place_id, p.name, { ctx: 'v', extra: `<span class="car-pos ${i === 0 ? 'first' : ''}">${i + 1}</span>${m ? `<span class="car-move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲' : '▼'}</span>` : ''}` })}
             <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
               <span class="name">${esc(p.name)}</span>
+              ${placeDesc(p.place_id)}
               <span class="foot-row"><span class="open-hint">${action ? 'Web ↗' : 'Web y carta ↗'}</span>${action}</span>
             </div>
           </li>`;
@@ -1379,6 +1381,13 @@ function thumb(placeId, fallback = '🍽️', size = '') {
 function openAttrs(placeId, name) {
   return placeId ? `data-open="${esc(placeId)}" data-name="${esc(name)}" role="link" tabindex="0"` : `data-open-name="${esc(name)}" role="link" tabindex="0"`;
 }
+// Descripción corta del sitio (se rellena al llegar de Google; vacía si Google no tiene nada)
+function placeDesc(placeId) {
+  if (!placeId) return '';
+  const info = state.placeInfo.get(placeId);
+  const html = info && 'desc' in info ? descHTML(info.desc) : '';
+  return `<span class="desc ${info && 'desc' in info && !html ? 'none' : ''}" data-desc="${esc(placeId)}">${html}</span>`;
+}
 function winnerPhoto(b) {
   const w = b.proposals.find((p) => p.id === b.session.winner_proposal_id);
   if (!w?.place_id) return '';
@@ -1394,11 +1403,14 @@ state.placeInfo = new Map();
 function hydratePlaces() {
   $app.querySelectorAll('.carousel').forEach((el) => { el._photos = state.placeInfo.get(el.dataset.car)?.photos; bindCarousel(el); });
   if (!state.mapsKey) return;
-  const ids = new Set();
+  const ids = new Set(), withDesc = new Set();
   $app.querySelectorAll('[data-thumb],[data-car]').forEach((el) => ids.add(el.dataset.thumb || el.dataset.car));
+  $app.querySelectorAll('[data-desc]').forEach((el) => { ids.add(el.dataset.desc); withDesc.add(el.dataset.desc); });
   for (const id of ids) {
-    if (state.placeInfo.has(id)) continue;
-    placeInfo(state.mapsKey, id).then((info) => {
+    const have = state.placeInfo.get(id);
+    const details = withDesc.has(id);
+    if (have && (!details || 'desc' in have)) continue;
+    placeInfo(state.mapsKey, id, { details }).then((info) => {
       if (!info) return;
       state.placeInfo.set(id, info);
       applyPlaceInfo(id, info);
@@ -1406,6 +1418,10 @@ function hydratePlaces() {
   }
 }
 function applyPlaceInfo(id, info) {
+  if ('desc' in info) {
+    const html = descHTML(info.desc);
+    $app.querySelectorAll(`[data-desc="${CSS.escape(id)}"]`).forEach((el) => { el.innerHTML = html; el.classList.toggle('none', !html); });
+  }
   const first = info.photos?.[0];
   if (!first) return;
   $app.querySelectorAll(`[data-thumb="${CSS.escape(id)}"]`).forEach((el) => {
@@ -1414,6 +1430,8 @@ function applyPlaceInfo(id, info) {
     el.title = first.author ? `Foto: ${first.author} · Google Maps` : 'Google Maps';
   });
   $app.querySelectorAll(`.carousel[data-car="${CSS.escape(id)}"]`).forEach((el) => {
+    // Si ya tiene estas mismas fotos (p. ej. solo llegaba la descripción), no se toca
+    if (el._photos && el._photos.length === info.photos.length && el._photos.every((ph, i) => ph.url === info.photos[i].url)) return;
     const extra = [...el.querySelectorAll('.car-pos,.car-move,.hero-link')].map((x) => x.outerHTML).join('');
     const attrs = [...el.attributes].filter((a) => a.name !== 'class' && a.name !== 'data-bound').map((a) => `${a.name}="${esc(a.value)}"`).join(' ');
     const tmp = document.createElement('div');

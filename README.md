@@ -15,7 +15,7 @@ Un almuerzo al mes = una **sesión**. Cada sesión pasa por 4 fases (avanzan sol
 **Gran final** (la revela el admin): ranking de sitios por nota y clasificación final = puntos de victoria + nota de tus sitios + 5 de bonus al mejor sitio. El primero gana una cena.
 
 ### Pool privado y batallas ⚔️
-- Cada uno tiene su **pool privado** de sitios (nadie más lo ve). Los sitios se buscan en **Google Maps** (buscador o tocando el mapa) y se les pone un nombre; la tarjeta muestra la foto principal de Google.
+- Cada uno tiene su **pool privado** de sitios (nadie más lo ve). Los sitios se buscan en **Google Maps** (buscador o tocando el mapa) y se les pone un nombre; la tarjeta muestra las fotos de Google (se deslizan) y, en el pool general y la votación, una descripción corta.
 - En la fase de propuestas cada uno elige uno de su pool. En el pool general, tocar una tarjeta abre la **web del sitio** (o su ficha de Google Maps si no tiene web) para ver la carta antes de votar.
 - Si añades a tu pool un sitio que ya tiene otro (mismo sitio de Google Maps) → **batalla**. Quien la provoca gira la **ruleta**, que elige un minijuego: 🥪 Bocata tocho, 🥜 Los cacaos del gasto o 🥖 Corta la barra.
 - Si más gente añade el mismo sitio antes de que se resuelva, entra en la misma batalla. Tras resolverse, un nuevo interesado reta al que lo tiene.
@@ -50,7 +50,10 @@ Hace falta una **clave de navegador** de Google Maps Platform (requiere cuenta d
 3. Credenciales → Crear clave de API → Restringir: *Sitios web* `https://iwanllu.github.io/*` y *APIs* solo las dos anteriores.
 4. En la web: Perfil → Admin · Google Maps → pegar la clave → Guardar.
 
-Solo se guarda el identificador del sitio; foto, dirección y web se piden a Google al mostrarlos (la web solo al tocar la tarjeta).
+Solo se guarda el identificador del sitio; fotos, descripción y web se piden a Google al mostrarlos:
+- **Fotos** (hasta 5 por sitio): la consulta es gratuita; cada foto vista cuenta como *Place Photo* (1.000 gratis/mes).
+- **Descripción** (tipo · precio · resumen de Google o, si no tiene, servicios como terraza o grupos): tarifa *Enterprise + Atmosphere* (1.000 gratis/mes), por eso solo se pide en el pool general, la votación y el buscador, no en Mi pool. Los resúmenes con IA de Google (Gemini) no están disponibles en España.
+- **Web**: solo al tocar la tarjeta (*Enterprise*, 1.000 gratis/mes).
 
 ## Seguridad
 - Todas las tablas tienen RLS (`supabase/*.sql`). La web usa solo la *publishable key*; nunca pongas la secret/service_role en el código.

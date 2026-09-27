@@ -51,17 +51,51 @@ export const photoList = (place) => (place.photos || []).slice(0, MAX_PHOTOS).ma
   const a = ph.authorAttributions?.[0];
   return { url: ph.getURI({ maxWidth: 800, maxHeight: 600 }), author: a ? a.displayName : null };
 });
-export function placeInfo(key, id) {
+// Descripción (tipo, precio, resumen de Google y servicios). Estos campos son de la tarifa
+// "Enterprise + Atmosphere" (1.000 gratis/mes), así que solo se piden donde ayudan a decidir:
+// pool general, votación y buscador. Mi pool usa solo las fotos (gratis).
+const detailCache = new Map();
+export const DESC_FIELDS = ['primaryTypeDisplayName', 'editorialSummary', 'priceRange', 'priceLevel',
+  'hasOutdoorSeating', 'isGoodForGroups', 'servesBreakfast', 'isReservable', 'servesVegetarianFood', 'allowsDogs'];
+const PRICE_LEVEL = { INEXPENSIVE: '€', MODERATE: '€€', EXPENSIVE: '€€€', VERY_EXPENSIVE: '€€€€' };
+const FEATURES = [['hasOutdoorSeating', 'Terraza'], ['isGoodForGroups', 'Para grupos'], ['servesBreakfast', 'Desayunos'],
+  ['isReservable', 'Se puede reservar'], ['servesVegetarianFood', 'Opción vegetariana'], ['allowsDogs', 'Admite perros']];
+const amount = (m) => { const n = Number(m?.units ?? m?.amount); return m && Number.isFinite(n) ? Math.round(n) : null; };
+function priceText(place) {
+  const r = place.priceRange;
+  if (r) {
+    const s = amount(r.startPrice), e = amount(r.endPrice);
+    const cur = (r.startPrice || r.endPrice)?.currencyCode || 'EUR';
+    const sym = cur === 'EUR' ? '€' : cur;
+    if (s != null && e != null) return `${s}–${e}\u00a0${sym}`;
+    if (s != null) return `Más de ${s}\u00a0${sym}`;
+  }
+  const lv = place.priceLevel ? String(place.priceLevel).toUpperCase().replace(/\s+/g, '_').replace(/^PRICE_LEVEL_/, '') : '';
+  return PRICE_LEVEL[lv] || null;
+}
+export function describePlace(place) {
+  const d = {
+    type: place.primaryTypeDisplayName || null,
+    price: priceText(place),
+    summary: (place.editorialSummary || '').trim() || null,
+    features: FEATURES.filter(([f]) => place[f] === true).map(([, label]) => label).slice(0, 3),
+  };
+  return d.type || d.price || d.summary || d.features.length ? d : null;
+}
+
+export function placeInfo(key, id, { details = false } = {}) {
   if (!id) return Promise.resolve(null);
-  if (!infoCache.has(id)) {
-    infoCache.set(id, loadMaps(key).then(async () => {
+  if (!details && detailCache.has(id)) return detailCache.get(id);
+  const cache = details ? detailCache : infoCache;
+  if (!cache.has(id)) {
+    cache.set(id, loadMaps(key).then(async () => {
       const { Place } = await google.maps.importLibrary('places');
       const p = new Place({ id, requestedLanguage: 'es' });
-      await p.fetchFields({ fields: ['photos'] });
-      return { photos: photoList(p) };
-    }).catch((e) => { infoCache.delete(id); throw e; }));
+      await p.fetchFields({ fields: details ? ['photos', ...DESC_FIELDS] : ['photos'] });
+      return details ? { photos: photoList(p), desc: describePlace(p) } : { photos: photoList(p) };
+    }).catch((e) => { cache.delete(id); throw e; }));
   }
-  return infoCache.get(id);
+  return cache.get(id);
 }
 export const cachedInfo = (id) => infoCache.get(id);
 
@@ -179,7 +213,7 @@ export function pickPlace(key, { title = 'Añadir un sitio', button = 'Añadir a
       async function select(place) {
         panel.innerHTML = '<p class="pk-hint">Cargando…</p>';
         try {
-          await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location', 'photos', 'googleMapsURI', 'primaryTypeDisplayName'] });
+          await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location', 'photos', 'googleMapsURI', ...DESC_FIELDS] });
         } catch (err) {
           panel.innerHTML = `<p class="pk-hint">⚠️ ${esc(err.message)}</p>`;
           return;
@@ -195,6 +229,7 @@ export function pickPlace(key, { title = 'Añadir un sitio', button = 'Añadir a
           <div class="pk-info">
             <strong>${esc(gName)}</strong>
             <span class="hint">${esc(place.primaryTypeDisplayName || '')}${place.primaryTypeDisplayName && place.formattedAddress ? ' · ' : ''}${esc(place.formattedAddress || '')}</span>
+            ${descText(describePlace(place), { type: false }) ? `<span class="pk-desc">${descHTML(describePlace(place), { type: false })}</span>` : ''}
           </div>
           <div class="field"><label for="pk-name">Nombre para el grupo</label>
             <input class="input" id="pk-name" maxlength="80" value="${esc(gName.slice(0, 80))}" autocomplete="off"></div>
@@ -209,6 +244,21 @@ export function pickPlace(key, { title = 'Añadir un sitio', button = 'Añadir a
       }
     }).catch((err) => fail(err.message));
   });
+}
+
+// ---------- Texto de la descripción ----------
+// "Bar · 10–20 € · Clásico de almuerzos…" o, si Google no tiene resumen, "Bar · €€ · Terraza · Para grupos"
+function descParts(d, { type = true } = {}) {
+  if (!d) return { head: [], tail: [] };
+  return { head: [type ? d.type : null, d.price].filter(Boolean), tail: d.summary ? [d.summary] : d.features };
+}
+export function descText(d, opts) { const { head, tail } = descParts(d, opts); return [...head, ...tail].join(' · '); }
+export function descHTML(d, opts) {
+  const { head, tail } = descParts(d, opts);
+  const nw = (t) => `<span class="nw">${esc(t)}</span>`;   // "€€" o "Para grupos" no se parten
+  const h = head.length ? `<b>${head.map(nw).join(' · ')}</b>` : '';
+  const t = d?.summary ? esc(d.summary) : tail.map(nw).join(' · ');
+  return `${h}${h && t ? ' · ' : ''}${t}`;
 }
 
 // ---------- Carrusel de fotos (se desliza con el dedo) ----------
