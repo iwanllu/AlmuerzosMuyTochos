@@ -305,7 +305,7 @@ begin
   if b.challenger_id is distinct from auth.uid() and not public.is_admin() then
     raise exception 'Solo quien ha provocado la batalla puede girar la ruleta';
   end if;
-  g := (array['bocata', 'oliva', 'cacaos', 'barra'])[1 + floor(random() * 4)::int];
+  g := (array['bocata', 'cacaos', 'barra'])[1 + floor(random() * 3)::int];
   update public.battles set status = 'playing', game = g, seed = 1 + floor(random() * 2147483646)::int, spun_at = now()
   where id = p_battle;
   for u in select public._battle_players_except(p_battle, auth.uid()) loop
@@ -488,4 +488,20 @@ begin
                  where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'battle_stats') then
     alter publication supabase_realtime add table public.battle_stats;
   end if;
+end $$;
+
+-- ---------- Hueso de oliva retirado ----------
+-- Si quedaba alguna batalla abierta con ese juego, se le asigna otro y se reinician sus intentos
+do $$
+declare b record;
+begin
+  for b in select id from public.battles where status = 'playing' and game = 'oliva' loop
+    update public.battles
+       set game = (array['bocata', 'cacaos', 'barra'])[1 + floor(random() * 3)::int],
+           seed = 1 + floor(random() * 2147483646)::int
+     where id = b.id;
+    update public.battle_players
+       set attempts = 0, scores = '{}', open_attempt = false, attempt_started_at = null, finished = false
+     where battle_id = b.id;
+  end loop;
 end $$;
