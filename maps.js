@@ -44,21 +44,21 @@ export function loadMaps(key) {
 const infoCache = new Map();
 const linkCache = new Map();
 
-// Foto + dirección (tarifa Essentials: 10.000 gratis/mes)
+// Fotos del sitio (solo el campo "photos": tarifa IDs Only, gratis e ilimitada;
+// cada foto que se llega a ver cuenta como "Place Photo": 1.000 gratis/mes)
+export const MAX_PHOTOS = 5;
+export const photoList = (place) => (place.photos || []).slice(0, MAX_PHOTOS).map((ph) => {
+  const a = ph.authorAttributions?.[0];
+  return { url: ph.getURI({ maxWidth: 800, maxHeight: 600 }), author: a ? a.displayName : null };
+});
 export function placeInfo(key, id) {
   if (!id) return Promise.resolve(null);
   if (!infoCache.has(id)) {
     infoCache.set(id, loadMaps(key).then(async () => {
       const { Place } = await google.maps.importLibrary('places');
       const p = new Place({ id, requestedLanguage: 'es' });
-      await p.fetchFields({ fields: ['photos', 'formattedAddress'] });
-      const ph = p.photos?.[0];
-      const attr = ph?.authorAttributions?.[0];
-      return {
-        address: p.formattedAddress || '',
-        photo: ph ? ph.getURI({ maxWidth: 640, maxHeight: 480 }) : null,
-        author: attr ? { name: attr.displayName, uri: attr.uri } : null,
-      };
+      await p.fetchFields({ fields: ['photos'] });
+      return { photos: photoList(p) };
     }).catch((e) => { infoCache.delete(id); throw e; }));
   }
   return infoCache.get(id);
@@ -188,30 +188,60 @@ export function pickPlace(key, { title = 'Añadir un sitio', button = 'Añadir a
         if (closed) return;
         selected = place;
         if (place.location) { map.panTo(place.location); map.setZoom(Math.max(map.getZoom(), 16)); marker.position = place.location; marker.map = map; }
-        const ph = place.photos?.[0];
-        const attr = ph?.authorAttributions?.[0];
-        const photo = ph ? ph.getURI({ maxWidth: 640, maxHeight: 480 }) : null;
+        const photos = photoList(place);
         const gName = place.displayName || '';
         panel.innerHTML = `
-          <div class="pk-card">
-            ${photo ? `<img class="pk-photo" src="${esc(photo)}" alt="">` : '<div class="pk-photo pk-nophoto">🍽️</div>'}
-            <div class="pk-info">
-              <strong>${esc(gName)}</strong>
-              <span class="hint">${esc(place.primaryTypeDisplayName || '')}${place.primaryTypeDisplayName && place.formattedAddress ? ' · ' : ''}${esc(place.formattedAddress || '')}</span>
-              ${attr ? `<span class="gattr">Foto: ${esc(attr.displayName)} · Google Maps</span>` : '<span class="gattr">Google Maps</span>'}
-            </div>
+          ${carouselHTML(photos)}
+          <div class="pk-info">
+            <strong>${esc(gName)}</strong>
+            <span class="hint">${esc(place.primaryTypeDisplayName || '')}${place.primaryTypeDisplayName && place.formattedAddress ? ' · ' : ''}${esc(place.formattedAddress || '')}</span>
           </div>
           <div class="field"><label for="pk-name">Nombre para el grupo</label>
             <input class="input" id="pk-name" maxlength="80" value="${esc(gName.slice(0, 80))}" autocomplete="off"></div>
-          <div class="field"><input class="input" id="pk-note" maxlength="200" placeholder="Comentario (opcional): qué pedir, por qué mola…" autocomplete="off"></div>
           <div class="pk-error error-text" role="alert"></div>
           <button class="btn primary block" id="pk-add">${esc(button)}</button>`;
+        bindCarousel(panel.querySelector('.carousel'), photos);
         $('#pk-add').onclick = () => {
           const name = $('#pk-name').value.replace(/\s+/g, ' ').trim();
           if (name.length < 2) { $('.pk-error').textContent = 'Ponle un nombre'; return; }
-          close({ place_id: selected.id, name, note: $('#pk-note').value.trim() });
+          close({ place_id: selected.id, name, note: '' });
         };
       }
     }).catch((err) => fail(err.message));
   });
+}
+
+// ---------- Carrusel de fotos (se desliza con el dedo) ----------
+export function carouselHTML(photos, { fallback = '🍽️', extra = '', attrs = '' } = {}) {
+  const list = photos || [];
+  return `<div class="carousel" ${attrs}>
+    <div class="car-track">${list.length
+      ? list.map((ph, i) => `<div class="car-slide"><img src="${esc(ph.url)}" alt="" ${i ? 'loading="lazy"' : ''} decoding="async" draggable="false"></div>`).join('')
+      : `<div class="car-slide car-empty"><span>${fallback}</span></div>`}</div>
+    ${extra}
+    ${list.length > 1 ? `<div class="car-dots">${list.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
+    ${list.length ? `<span class="car-attr">${list[0].author ? `📷 ${esc(list[0].author)} · ` : ''}Google Maps</span>` : ''}
+    ${list.length > 1 ? '<button type="button" class="car-nav prev" aria-label="Foto anterior">‹</button><button type="button" class="car-nav next" aria-label="Foto siguiente">›</button>' : ''}
+  </div>`;
+}
+export function bindCarousel(el, photos) {
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = '1';
+  const track = el.querySelector('.car-track');
+  const dots = [...el.querySelectorAll('.car-dots i')];
+  const attr = el.querySelector('.car-attr');
+  const idx = () => Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  const update = () => {
+    const i = idx();
+    dots.forEach((d, k) => d.classList.toggle('on', k === i));
+    const list = photos || el._photos;
+    if (attr && list?.[i]) attr.textContent = `${list[i].author ? `📷 ${list[i].author} · ` : ''}Google Maps`;
+    el.dataset.index = i;
+  };
+  track.addEventListener('scroll', update, { passive: true });
+  el.querySelectorAll('.car-nav').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    track.scrollBy({ left: (b.classList.contains('next') ? 1 : -1) * track.clientWidth, behavior: 'smooth' });
+  }));
+  el._update = update;
 }

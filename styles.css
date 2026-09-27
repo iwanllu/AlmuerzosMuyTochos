@@ -456,7 +456,7 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .pool-item.place-card { align-items: center; }
 .rank-item .thumb { margin-left: -2px; }
 .pick .thumb { margin: -4px 0; }
-.hero-photo {
+.hero-photo-old {
   position: relative; height: 170px; margin: -22px -16px 14px; border-radius: var(--radius) var(--radius) 0 0;
   background: var(--surface-2) center / cover no-repeat; cursor: pointer;
 }
@@ -502,3 +502,49 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 
 .mine-row { display: flex; align-items: center; gap: 12px; }
 .mine-row .body { display: grid; gap: 2px; min-width: 0; }
+
+/* ---------- Tarjetas con carrusel de fotos ---------- */
+.tiles { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.place-tile { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; border: 2px solid transparent; }
+.place-tile.mine { border: 2px dashed var(--accent); }
+.place-tile.voted { border-color: var(--ok); }
+.tile-foot { display: flex; align-items: center; gap: 10px; padding: 10px 6px 4px; cursor: pointer; }
+.tile-foot .grow { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.tile-foot .name { font: 800 18px/1.2 var(--display); overflow-wrap: anywhere; }
+.carousel {
+  position: relative; border-radius: 12px; overflow: hidden; background: var(--surface-2);
+  aspect-ratio: 16 / 9; cursor: pointer; isolation: isolate;
+}
+.car-track {
+  display: flex; height: 100%; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+}
+.car-track::-webkit-scrollbar { display: none; }
+.car-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+.car-slide img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+.car-empty { display: grid; place-items: center; font-size: 46px; }
+.car-dots { position: absolute; right: 10px; bottom: 9px; display: flex; gap: 5px; pointer-events: none; }
+.car-dots i { width: 7px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.6); box-shadow: 0 0 3px rgba(0,0,0,.45); transition: width .2s; }
+.car-dots i.on { background: #fff; width: 18px; }
+.car-attr {
+  position: absolute; left: 8px; bottom: 7px; max-width: 58%; padding: 2px 7px; border-radius: 999px;
+  background: rgba(0,0,0,.45); color: #fff; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+.car-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; border: 0;
+  background: rgba(255,255,255,.85); color: #222; font: 700 22px/1 var(--body); display: none; place-items: center; box-shadow: var(--shadow);
+}
+.car-nav.prev { left: 8px; } .car-nav.next { right: 8px; }
+@media (hover: hover) and (pointer: fine) { .carousel:hover .car-nav { display: grid; } }
+.car-pos {
+  position: absolute; left: 8px; top: 8px; min-width: 34px; height: 34px; padding: 0 8px; border-radius: 17px;
+  display: grid; place-items: center; background: rgba(255,255,255,.92); color: #2a1f18; font: 800 17px/1 var(--display); box-shadow: var(--shadow);
+}
+.car-pos.first { background: #ffd43b; }
+.car-move { position: absolute; right: 8px; top: 8px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; background: rgba(255,255,255,.92); animation: pop .3s ease; }
+.car-move.up { color: #2b8a3e; } .car-move.down { color: #868e96; }
+.hero-car { margin: -8px -4px 12px; }
+.hero-car .carousel { aspect-ratio: 16 / 10; }
+.hero-car .hero-link { position: absolute; right: 10px; top: 10px; bottom: auto; padding: 6px 10px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-weight: 700; pointer-events: none; }
+.picker .carousel { margin-bottom: 10px; cursor: default; }
+.picker .pk-info { margin-bottom: 12px; }

@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY, EMAIL_DOMAIN } from './config.js';
-import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=6';
-import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError } from './maps.js?v=6';
+import { GAMES, runGame, rouletteScreen, gameScreen, closeOverlay } from './games.js?v=7';
+import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError, carouselHTML, bindCarousel } from './maps.js?v=7';
 
 // ===========================================================================
 // Almuerzos Muy Tochos
@@ -272,9 +272,18 @@ function captureLayout() {
   $app.querySelectorAll('[data-flip]').forEach((el) => rects.set(el.dataset.flip, el.getBoundingClientRect().top));
   const a = document.activeElement;
   const focus = a && a.id && $app.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
-  return { rects, focus };
+  const cars = new Map();
+  $app.querySelectorAll('.carousel[data-car]').forEach((el) => {
+    const t = el.querySelector('.car-track');
+    if (t && t.scrollLeft) cars.set(el.dataset.car + '|' + (el.dataset.ctx || ''), t.scrollLeft);
+  });
+  return { rects, focus, cars };
 }
-function restoreLayout({ rects, focus }) {
+function restoreLayout({ rects, focus, cars }) {
+  $app.querySelectorAll('.carousel[data-car]').forEach((el) => {
+    const v = cars?.get(el.dataset.car + '|' + (el.dataset.ctx || ''));
+    if (v) el.querySelector('.car-track').scrollLeft = v;
+  });
   if (focus) {
     const el = document.getElementById(focus.id);
     if (el) { el.focus({ preventScroll: true }); try { el.setSelectionRange(focus.s, focus.e); } catch { /* no aplica */ } }
@@ -515,7 +524,7 @@ function proposalsView(b) {
           <label class="pick ${p.battle_id ? 'disabled' : ''} ${d.placeId === p.id ? 'on' : ''}">
             <input type="radio" name="place" value="${p.id}" ${d.placeId === p.id ? 'checked' : ''} ${p.battle_id ? 'disabled' : ''}>
             ${thumb(p.place_id, '🍽️', 'sm')}
-            <span class="body"><span class="name">${esc(p.name)}</span>${p.note ? `<span class="note">${esc(p.note)}</span>` : ''}</span>
+            <span class="body"><span class="name">${esc(p.name)}</span></span>
             ${p.battle_id ? '<span class="chip accent">⚔️ en batalla</span>' : ''}
           </label>`).join('')}
       </div>` : '<p class="hint">Tu pool está vacío: añade un sitio para poder proponerlo.</p>'}
@@ -536,8 +545,7 @@ function proposalsView(b) {
         ${thumb(mp.place_id)}
         <span class="body">
           <span style="font:800 20px/1.2 var(--display)">${esc(mp.name)}</span>
-          ${addrLine(mp.place_id)}
-          ${mp.note ? `<span class="hint">${linkify(mp.note)}</span>` : ''}
+          <span class="open-hint">Web y carta ↗</span>
         </span>
       </div>
       <div class="btn-row" style="margin-top:14px">
@@ -551,19 +559,15 @@ function proposalsView(b) {
     <div class="section-title" style="margin-top:20px"></div>
     ${counter(b)}
     <div class="section-title"><span class="grow">Pool general · ${b.proposals.length} ${b.proposals.length === 1 ? 'sitio' : 'sitios'}</span><span class="chip">anónimo</span></div>
-    ${b.proposals.length ? '<p class="hint" style="margin:-4px 4px 10px">Toca un sitio para ver su web y su carta.</p>' : ''}
-    ${b.proposals.length ? `<ul class="pool">
+    ${b.proposals.length ? '<p class="hint" style="margin:-4px 4px 10px">Desliza las fotos y toca un sitio para ver su web y su carta.</p>' : ''}
+    ${b.proposals.length ? `<ul class="tiles">
       ${b.proposals.map((p) => `
-        <li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>
-          ${thumb(p.place_id)}
-          <span class="body">
-            <span class="name">${esc(p.name)}</span>
-            ${addrLine(p.place_id)}
-            ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
-            ${p.mine ? '<span class="hint">Tu propuesta · solo tú lo sabes</span>' : ''}
-            <span class="open-hint">Ver web y carta ↗</span>
-            ${attrLine(p.place_id)}
-          </span>
+        <li class="place-tile ${p.mine ? 'mine' : ''}">
+          ${carousel(p.place_id, p.name, { ctx: 'g' })}
+          <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
+            <span class="grow"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">Tu propuesta · solo tú lo sabes</span>' : ''}</span>
+            <span class="open-hint">Web y carta ↗</span>
+          </div>
         </li>`).join('')}
     </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
 }
@@ -583,7 +587,7 @@ function votingView(b) {
     <div class="section-title" style="margin-top:20px"></div>
     ${counter(b)}
     <div class="section-title"><span class="grow">Clasificación en directo</span><span class="live">en directo</span></div>
-    <ul class="rank">
+    <ul class="tiles">
       ${b.proposals.map((p, i) => {
         const m = mv[p.id] && mv[p.id].until > now ? mv[p.id] : null;
         const isVote = voted === p.id;
@@ -592,22 +596,16 @@ function votingView(b) {
         else if (p.mine) action = '<span class="chip">Tuya</span>';
         else if (!voted) action = `<button class="btn primary small" data-vote="${p.id}" data-name="${esc(p.name)}">Votar</button>`;
         return `
-          <li data-flip="p${p.id}">
-            <div class="rank-item place-card ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>
-              <span class="pos">${i + 1}</span>
-              ${thumb(p.place_id, '🍽️', 'sm')}
-              <span class="body">
-                <span class="name">${esc(p.name)}</span>
-                ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
-                <span class="open-hint">Web y carta ↗</span>
-              </span>
-              ${m ? `<span class="move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲' : '▼'}</span>` : ''}
+          <li data-flip="p${p.id}" class="place-tile rank-tile ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}">
+            ${carousel(p.place_id, p.name, { ctx: 'v', extra: `<span class="car-pos ${i === 0 ? 'first' : ''}">${i + 1}</span>${m ? `<span class="car-move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲ sube' : '▼ baja'}</span>` : ''}` })}
+            <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
+              <span class="grow"><span class="name">${esc(p.name)}</span><span class="open-hint">Web y carta ↗</span></span>
               ${action}
             </div>
           </li>`;
       }).join('')}
     </ul>
-    <p class="hint center" style="margin-top:12px">La lista se ordena por votos, pero nadie ve cuántos tiene cada sitio. Toca un sitio para ver su web y su carta.</p>`;
+    <p class="hint center" style="margin-top:12px">La lista se ordena por votos, pero nadie ve cuántos tiene cada sitio. Desliza las fotos y toca un sitio para ver su web y su carta.</p>`;
 }
 
 function ratingView(b) {
@@ -682,7 +680,7 @@ function closedView(b) {
     ${others.length ? `
       <div class="section-title"><span class="grow">Resto de propuestas</span><span class="chip">anónimas</span></div>
       <ul class="pool">
-        ${others.map((p) => `<li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>${thumb(p.place_id, '🍽️', 'sm')}<span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">La tuya</span>' : ''}${attrLine(p.place_id)}</span></li>`).join('')}
+        ${others.map((p) => `<li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>${thumb(p.place_id, '🍽️', 'sm')}<span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">La tuya</span>' : ''}</span><span class="open-hint">Web ↗</span></li>`).join('')}
       </ul>` : ''}`;
 }
 
@@ -1308,18 +1306,17 @@ function renderPool() {
         <button class="btn primary block" id="pool-search">🔎 Buscar un sitio en Google Maps</button>
         <p class="hint" style="margin:10px 0 0">Búscalo, ponle un nombre y se añade a tu pool. ⚔️ Si alguien más ya lo tiene, se abre una batalla y quien la gane se lo queda.</p>
       </div>
-      ${state.pool.length ? `<ul class="pool" style="margin-top:12px">
+      ${state.pool.length ? `<ul class="tiles" style="margin-top:12px">
         ${state.pool.map((p) => `
-          <li class="pool-item place-card" ${openAttrs(p.place_id, p.name)}>
-            ${thumb(p.place_id, p.battle_id ? '⚔️' : '🍽️')}
-            <span class="body">
-              <span class="name">${esc(p.name)}</span>
-              ${addrLine(p.place_id)}
-              ${p.note ? `<span class="note">${linkify(p.note)}</span>` : ''}
-              ${p.battle_id ? '<span class="hint">⚔️ En batalla: no se puede proponer hasta que la ganes</span>' : p.proposed ? '<span class="hint">✅ Propuesto en la sesión actual</span>' : ''}
-              ${attrLine(p.place_id)}
-            </span>
-            ${!p.battle_id && !p.proposed ? `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>` : ''}
+          <li class="place-tile">
+            ${carousel(p.place_id, p.name, { ctx: 'p', fallback: p.battle_id ? '⚔️' : '🍽️' })}
+            <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
+              <span class="grow">
+                <span class="name">${esc(p.name)}</span>
+                ${p.battle_id ? '<span class="hint">⚔️ En batalla: no se puede proponer hasta que la ganes</span>' : p.proposed ? '<span class="hint">✅ Propuesto en la sesión actual</span>' : ''}
+              </span>
+              ${!p.battle_id && !p.proposed ? `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>` : ''}
+            </div>
           </li>`).join('')}
       </ul>` : '<div class="card empty" style="margin-top:12px;padding:24px">Tu pool está vacío. Añade los sitios que te gustaría proponer.</div>'}
       ${done.length ? `<div class="section-title">Batallas terminadas</div><div class="stack-gap">${done.map(battleCard).join('')}</div>` : ''}
@@ -1372,20 +1369,15 @@ function renderPool() {
 // ---------------------------------------------------------------------------
 // Sitios de Google Maps: miniaturas, dirección, atribución y web
 // ---------------------------------------------------------------------------
+function carousel(placeId, name, { ctx = '', fallback = '🍽️', extra = '' } = {}) {
+  const info = placeId && state.placeInfo.get(placeId);
+  const attrs = `${placeId ? `data-car="${esc(placeId)}"` : ''} data-ctx="${ctx}" ${openAttrs(placeId, name)}`;
+  return carouselHTML(info?.photos, { fallback, extra, attrs });
+}
 function thumb(placeId, fallback = '🍽️', size = '') {
-  const info = placeId && state.placeInfo?.get(placeId);
-  const img = info?.photo ? `style="background-image:url('${esc(info.photo)}')"` : '';
+  const ph = placeId && state.placeInfo.get(placeId)?.photos?.[0];
+  const img = ph ? `style="background-image:url('${esc(ph.url)}')" title="${esc(ph.author ? `Foto: ${ph.author} · Google Maps` : 'Google Maps')}"` : '';
   return `<span class="thumb ${size} ${img ? 'has-photo' : ''}" ${placeId ? `data-thumb="${esc(placeId)}"` : ''} ${img} aria-hidden="true"><span>${fallback}</span></span>`;
-}
-function addrLine(placeId) {
-  if (!placeId) return '';
-  const info = state.placeInfo?.get(placeId);
-  return `<span class="addr" data-addr="${esc(placeId)}">${info?.address ? esc(info.address) : ''}</span>`;
-}
-function attrLine(placeId) {
-  if (!placeId) return '';
-  const info = state.placeInfo?.get(placeId);
-  return `<span class="gattr" data-attr="${esc(placeId)}">${info?.author ? `Foto: ${esc(info.author.name)} · ` : ''}${info ? 'Google Maps' : ''}</span>`;
 }
 function openAttrs(placeId, name) {
   return placeId ? `data-open="${esc(placeId)}" data-name="${esc(name)}" role="link" tabindex="0"` : `data-open-name="${esc(name)}" role="link" tabindex="0"`;
@@ -1393,25 +1385,22 @@ function openAttrs(placeId, name) {
 function winnerPhoto(b) {
   const w = b.proposals.find((p) => p.id === b.session.winner_proposal_id);
   if (!w?.place_id) return '';
-  const info = state.placeInfo?.get(w.place_id);
-  return `<div class="hero-photo ${info?.photo ? 'has-photo' : ''}" data-hero="${esc(w.place_id)}" ${openAttrs(w.place_id, w.name)}
-    ${info?.photo ? `style="background-image:url('${esc(info.photo)}')"` : ''}><span class="hero-link">Web y carta ↗</span></div>
-    ${attrLine(w.place_id)}`;
+  return `<div class="hero-car">${carousel(w.place_id, w.name, { ctx: 'w', extra: '<span class="hero-link">Web y carta ↗</span>' })}</div>`;
 }
 function mapsNotice() {
   if (state.mapsKey) return '';
   return `<p class="hint" style="margin:0 0 10px">⚠️ Google Maps aún no está configurado. ${isAdmin() ? 'Configúralo en <b>Perfil</b>.' : 'Avisa al admin.'}</p>`;
 }
 
-// Rellena fotos, direcciones y atribuciones de lo que hay en pantalla
+// Rellena las fotos de lo que hay en pantalla y activa los carruseles
 state.placeInfo = new Map();
 function hydratePlaces() {
+  $app.querySelectorAll('.carousel').forEach((el) => { el._photos = state.placeInfo.get(el.dataset.car)?.photos; bindCarousel(el); });
   if (!state.mapsKey) return;
   const ids = new Set();
-  $app.querySelectorAll('[data-thumb],[data-addr],[data-hero],[data-attr]').forEach((el) =>
-    ids.add(el.dataset.thumb || el.dataset.addr || el.dataset.hero || el.dataset.attr));
+  $app.querySelectorAll('[data-thumb],[data-car]').forEach((el) => ids.add(el.dataset.thumb || el.dataset.car));
   for (const id of ids) {
-    if (state.placeInfo.has(id)) { applyPlaceInfo(id, state.placeInfo.get(id)); continue; }
+    if (state.placeInfo.has(id)) continue;
     placeInfo(state.mapsKey, id).then((info) => {
       if (!info) return;
       state.placeInfo.set(id, info);
@@ -1420,13 +1409,23 @@ function hydratePlaces() {
   }
 }
 function applyPlaceInfo(id, info) {
-  const sel = (attr) => $app.querySelectorAll(`[${attr}="${CSS.escape(id)}"]`);
-  if (info.photo) {
-    sel('data-thumb').forEach((el) => { el.style.backgroundImage = `url("${info.photo}")`; el.classList.add('has-photo'); });
-    sel('data-hero').forEach((el) => { el.style.backgroundImage = `url("${info.photo}")`; el.classList.add('has-photo'); });
-  }
-  sel('data-addr').forEach((el) => (el.textContent = info.address || ''));
-  sel('data-attr').forEach((el) => (el.textContent = `${info.author ? `Foto: ${info.author.name} · ` : ''}Google Maps`));
+  const first = info.photos?.[0];
+  if (!first) return;
+  $app.querySelectorAll(`[data-thumb="${CSS.escape(id)}"]`).forEach((el) => {
+    el.style.backgroundImage = `url("${first.url}")`;
+    el.classList.add('has-photo');
+    el.title = first.author ? `Foto: ${first.author} · Google Maps` : 'Google Maps';
+  });
+  $app.querySelectorAll(`.carousel[data-car="${CSS.escape(id)}"]`).forEach((el) => {
+    const extra = [...el.querySelectorAll('.car-pos,.car-move,.hero-link')].map((x) => x.outerHTML).join('');
+    const attrs = [...el.attributes].filter((a) => a.name !== 'class' && a.name !== 'data-bound').map((a) => `${a.name}="${esc(a.value)}"`).join(' ');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = carouselHTML(info.photos, { extra, attrs });
+    const fresh = tmp.firstElementChild;
+    fresh._photos = info.photos;
+    el.replaceWith(fresh);
+    bindCarousel(fresh);
+  });
 }
 
 // Tocar una tarjeta → web del sitio (o su ficha de Google Maps si no tiene web)
