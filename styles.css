@@ -656,3 +656,49 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .label-row label { margin: 0; }
 .cat-head .grow { display: flex; align-items: center; }
 .push-card strong { display: block; line-height: 1.35; }
+
+/* ---------- Ranking del próximo almuerzo: aspecto de clasificación ---------- */
+.tiles.ranking { gap: 8px; counter-reset: none; }
+.tiles.ranking .place-tile { padding-left: 6px; gap: 8px; }
+.tiles.ranking .place-tile > .carousel { flex-basis: 46%; }
+.rank-col {
+  flex: 0 0 38px; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.rank-num {
+  position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  font: 800 19px/1 var(--display); font-variant-numeric: tabular-nums; color: var(--muted);
+  background: var(--surface-2);
+}
+.rank-num.none { background: transparent; border: 2px dashed var(--line); color: var(--muted); font-size: 16px; }
+.rank-num.gold   { background: linear-gradient(145deg, #ffe066, #f5b700); color: #5a3e00; box-shadow: 0 2px 8px rgb(245 183 0 / .45), inset 0 1px 0 rgb(255 255 255 / .6); }
+.rank-num.silver { background: linear-gradient(145deg, #f1f3f5, #b8c0c8); color: #3d4650; box-shadow: 0 2px 6px rgb(120 130 140 / .35), inset 0 1px 0 rgb(255 255 255 / .7); }
+.rank-num.bronze { background: linear-gradient(145deg, #f6c79a, #cf8446); color: #5a2d08; box-shadow: 0 2px 6px rgb(207 132 70 / .35), inset 0 1px 0 rgb(255 255 255 / .5); }
+.rank-num .crown { position: absolute; top: -13px; left: 50%; transform: translateX(-50%) rotate(-8deg); font-size: 15px; line-height: 1; }
+.rank-move { font-size: 11px; font-weight: 800; line-height: 1; animation: pop .3s ease; }
+.rank-move.up { color: var(--ok); } .rank-move.down { color: var(--muted); }
+/* El que va primero */
+.place-tile.lead { border: 2px solid var(--gold); background: linear-gradient(100deg, var(--gold-soft), var(--surface) 55%); }
+.place-tile.lead .tile-foot .name { font-size: 18px; }
+/* Tu propio sitio: sin destacar, solo una etiqueta discreta */
+.place-tile.mine { border: 2px solid transparent; }
+.place-tile.mine.lead { border-color: var(--gold); }
+.mine-tag { font-size: 11px; font-weight: 600; color: var(--muted); padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 370px) {
+  .tiles.ranking .place-tile > .carousel { flex-basis: 42%; }
+  .rank-col { flex-basis: 30px; }
+  .rank-num { width: 28px; height: 28px; font-size: 16px; }
+}
+
+/* ---------- Tu propuesta: una línea pequeña ---------- */
+.mine-card { padding: 10px 12px; }
+.mine-line { display: flex; align-items: center; gap: 10px; }
+.mine-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.mine-open .body { min-width: 0; display: grid; }
+.mine-open .nm { font: 700 15px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mine-open .open-hint { font-size: 11.5px; }
+.thumb.xs { width: 38px; height: 38px; font-size: 17px; border-radius: 9px; }
+.mine-actions { display: flex; gap: 6px; flex: none; }
+.mine-actions .icon-btn.small { width: 32px; height: 32px; }
+.mine-actions .icon-btn.small svg { width: 16px; height: 16px; }
+.icon-btn.danger { color: var(--danger); }
+.mine-card .vote-status { margin-top: 10px; padding: 8px 10px; font-size: 13.5px; }

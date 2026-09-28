@@ -50,6 +50,7 @@ const ICON = {
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   pool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.3"/><circle cx="4.5" cy="12" r="1.3"/><circle cx="4.5" cy="18" r="1.3"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none"/></svg>',
   trophy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></svg>',
@@ -608,6 +609,27 @@ function renderSession(id) {
   bindSession(b);
 }
 
+// Columna de posición del ranking: medallas para el podio, flecha si acaba de subir o bajar
+function rankCol(i, ranked, move) {
+  if (!ranked) return '<div class="rank-col" aria-label="Sin posición todavía"><span class="rank-num none">–</span></div>';
+  const medal = ['gold', 'silver', 'bronze'][i] || '';
+  return `<div class="rank-col" aria-label="Posición ${i + 1}">
+    <span class="rank-num ${medal}">${i === 0 ? '<span class="crown" aria-hidden="true">👑</span>' : ''}${i + 1}</span>
+    ${move ? `<span class="rank-move ${move.dir}" aria-label="${move.dir === 'up' ? 'sube' : 'baja'}">${move.dir === 'up' ? '▲' : '▼'}</span>` : ''}
+  </div>`;
+}
+// Tu propuesta en una sola línea, discreta
+function mineLine(mp, extra = '') {
+  return `
+    <div class="mine-line">
+      <span class="mine-open" ${openAttrs(mp.place_id, mp.name)}>
+        ${thumb(mp.place_id, '🍽️', 'xs')}
+        <span class="body"><span class="nm">${esc(mp.name)}</span><span class="open-hint">Web ↗</span></span>
+      </span>
+      ${extra}
+    </div>`;
+}
+
 function proposalsView(b) {
   const id = b.session.id;
   const d = (state.drafts.proposal[id] ||= { placeId: null, editing: false, adding: false, name: '', note: '' });
@@ -618,17 +640,18 @@ function proposalsView(b) {
   const n = b.proposals.length;
   const ranking = `
     <div class="block-head">
-      <h3>Ranking de sitios para el próximo almuerzo ${info('ranking', 'Los sitios propuestos, sin saber de quién es cada uno. El orden lo decide la votación, que empieza cuando todos hayáis propuesto. Desliza las fotos y toca un sitio para ver su web y su carta.')}</h3>
+      <h3>🏆 Ranking de sitios para el próximo almuerzo ${info('ranking', 'Los sitios propuestos, sin saber de quién es cada uno. El orden lo decide la votación, que empieza cuando todos hayáis propuesto. Desliza las fotos y toca un sitio para ver su web y su carta.')}</h3>
       <div class="sub"><span>${n} ${n === 1 ? 'sitio propuesto' : 'sitios propuestos'} · aún sin votos</span></div>
     </div>
-    ${n ? `<ul class="tiles">
+    ${n ? `<ul class="tiles ranking">
       ${b.proposals.map((p) => `
-        <li class="place-tile ${p.mine ? 'mine' : ''}">
+        <li class="place-tile rank-tile ${p.mine ? 'mine' : ''}">
+          ${rankCol(0, false)}
           ${carousel(p.place_id, p.name, { ctx: 'g' })}
           <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
             <span class="name">${esc(p.name)}</span>
             ${placeDesc(p.place_id)}
-            <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="chip" title="Solo tú lo sabes">🤫 Tuya</span>' : ''}</span>
+            <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="mine-tag" title="Solo tú lo sabes">tuya</span>' : ''}</span>
           </div>
         </li>`).join('')}
     </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
@@ -654,18 +677,11 @@ function proposalsView(b) {
       </div>
     </form>`;
   const mine = mp ? `
-    <div class="card">
-      <div class="mine-row place-card" ${openAttrs(mp.place_id, mp.name)}>
-        ${thumb(mp.place_id)}
-        <span class="body">
-          <span style="font:800 20px/1.2 var(--display)">${esc(mp.name)}</span>
-          <span class="open-hint">Web y carta ↗</span>
-        </span>
-      </div>
-      <div class="btn-row" style="margin-top:14px">
-        <button class="btn ghost small" id="prop-edit">Cambiar</button>
-        <button class="btn danger small" id="prop-withdraw">Retirar</button>
-      </div>
+    <div class="card mine-card">
+      ${mineLine(mp, `<span class="mine-actions">
+        <button class="icon-btn small" id="prop-edit" aria-label="Cambiar propuesta" title="Cambiar">${ICON.edit}</button>
+        <button class="icon-btn small danger" id="prop-withdraw" aria-label="Retirar propuesta" title="Retirar">${ICON.x}</button>
+      </span>`)}
     </div>` : '';
 
   return `
@@ -682,22 +698,24 @@ function votingView(b) {
   const voted = b.my_vote;
   const votedName = voted && b.proposals.find((p) => p.id === voted)?.name;
   const mp = b.my_proposal || b.proposals.find((p) => p.mine);
+  const ranked = (b.session.votes_count || 0) > 0;
   return `
     <div class="block-head">
-      <h3>Ranking de sitios para el próximo almuerzo ${info('ranking', 'Se ordena en directo por votos, pero nadie ve cuántos tiene cada sitio. Cada uno tiene un voto, secreto y definitivo. Toca un sitio para ver su web y su carta.')}</h3>
-      <div class="sub"><span class="live">en directo</span><span>ordenado por votos</span></div>
+      <h3>🏆 Ranking de sitios para el próximo almuerzo ${info('ranking', 'Se ordena en directo por votos, pero nadie ve cuántos tiene cada sitio. Cada uno tiene un voto, secreto y definitivo. Toca un sitio para ver su web y su carta.')}</h3>
+      <div class="sub"><span class="live">en directo</span><span>${ranked ? 'ordenado por votos' : 'aún sin votos'}</span></div>
     </div>
-    <ul class="tiles">
+    <ul class="tiles ranking">
       ${b.proposals.map((p, i) => {
         const m = mv[p.id] && mv[p.id].until > now ? mv[p.id] : null;
         const isVote = voted === p.id;
         let action = '';
         if (isVote) action = '<span class="chip ok">Tu voto</span>';
-        else if (p.mine) action = '<span class="chip">Tuya</span>';
+        else if (p.mine) action = '<span class="mine-tag">tuya</span>';
         else if (!voted) action = `<button class="btn primary small" data-vote="${p.id}" data-name="${esc(p.name)}">Votar</button>`;
         return `
-          <li data-flip="p${p.id}" class="place-tile rank-tile ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}">
-            ${carousel(p.place_id, p.name, { ctx: 'v', extra: `<span class="car-pos ${i === 0 ? 'first' : ''}">${i + 1}</span>${m ? `<span class="car-move ${m.dir}" aria-label="${m.dir === 'up' ? 'sube' : 'baja'}">${m.dir === 'up' ? '▲' : '▼'}</span>` : ''}` })}
+          <li data-flip="p${p.id}" class="place-tile rank-tile ${ranked && i === 0 ? 'lead' : ''} ${ranked && i < 3 ? `podium p${i + 1}` : ''} ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}">
+            ${rankCol(i, ranked, m)}
+            ${carousel(p.place_id, p.name, { ctx: 'v' })}
             <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
               <span class="name">${esc(p.name)}</span>
               ${placeDesc(p.place_id)}
@@ -707,12 +725,8 @@ function votingView(b) {
       }).join('')}
     </ul>
     <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Tu sitio compite de forma anónima. No puedes votarlo: tu voto tiene que ir a otro, y no se puede cambiar.')}</div>
-    <div class="card">
-      ${mp ? `
-        <div class="mine-row place-card" ${openAttrs(mp.place_id, mp.name)}>
-          ${thumb(mp.place_id, '🍽️', 'sm')}
-          <span class="body"><span class="name" style="font:800 17px/1.2 var(--display)">${esc(mp.name)}</span><span class="open-hint">Web y carta ↗</span></span>
-        </div>` : '<p class="hint" style="margin:0">No propusiste ningún sitio para este almuerzo.</p>'}
+    <div class="card mine-card">
+      ${mp ? mineLine(mp) : '<p class="hint" style="margin:0">No propusiste ningún sitio para este almuerzo.</p>'}
       <div class="vote-status ${voted ? 'ok' : ''}">${voted
         ? `✅ Has votado <b>«${esc(votedName)}»</b>`
         : '🗳️ <b>Te falta votar:</b> elige en el ranking de arriba'}</div>
