@@ -34,6 +34,7 @@ Las reglas de puntos están en la tabla `league` y las categorías en `rating_ca
 |---|---|
 | Añadir un amigo | Authentication → Users → Add user → Create new user → `nombre@almuerzosmuytochos.app`, contraseña, **Auto Confirm User** marcado |
 | Resetear contraseña | `supabase/reset-password.sql` (cambia usuario y clave) |
+| Empezar de cero (borrar sesiones, votos, notas, pools y batallas) | `supabase/reset-datos.sql` (mantiene cuentas, nombres y fotos) |
 | Hacer admin a alguien | `supabase/make-admin.sql` |
 | Cambiar categorías de puntuación | Table Editor → `rating_categories` (label, emoji, peso, activa) |
 | Cambiar reglas de puntos | Table Editor → `league` |

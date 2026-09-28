@@ -1612,7 +1612,7 @@ function bindMapsAdmin() {
 // Modo entrenamiento (no toca el servidor; récord personal en este móvil)
 // ---------------------------------------------------------------------------
 function practiceBest(game) {
-  const v = lsGet(`almuerzos-best-${game}`);
+  const v = lsGet(`almuerzos-best2-${game}`);
   return v === null ? null : Number(v);
 }
 async function practiceFlow(game) {
@@ -1646,7 +1646,7 @@ async function practiceFlow(game) {
     if (!go) break;
     const res = await runGame(game, Math.floor(Math.random() * 2147483646) + 1, { label: `entrenamiento ${round}` });
     const record = best === null || res.score > best;
-    if (record) lsSet(`almuerzos-best-${game}`, String(res.score));
+    if (record) lsSet(`almuerzos-best2-${game}`, String(res.score));
     const next = await gameScreen(`
       <div class="big">${record && res.score > 0 ? '🏅' : g.emoji}</div>
       <h2 class="score-big">${res.score} puntos</h2>
