@@ -51,6 +51,7 @@ const ICON = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   pool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.3"/><circle cx="4.5" cy="12" r="1.3"/><circle cx="4.5" cy="18" r="1.3"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none"/></svg>',
   trophy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></svg>',
 };
 
@@ -231,6 +232,78 @@ async function call(fn, args, okMsg) {
 }
 
 // ---------------------------------------------------------------------------
+// Explicaciones en bocadillo: ⓘ junto al título de cada apartado
+// ---------------------------------------------------------------------------
+const INFO_TEXT = new Map();
+function info(key, html, label = 'Más información') {
+  INFO_TEXT.set(key, html);
+  return `<button type="button" class="info-btn" data-info="${esc(key)}" aria-label="${esc(label)}" aria-expanded="false">${ICON.info}</button>`;
+}
+function infoPop() {
+  let pop = document.getElementById('info-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'info-pop'; pop.setAttribute('role', 'tooltip'); pop.hidden = true;
+    pop.innerHTML = '<div class="ip-body"></div><span class="ip-arrow" aria-hidden="true"></span>';
+    document.body.appendChild(pop);
+  }
+  return pop;
+}
+function positionInfo(btn) {
+  const pop = infoPop();
+  const r = btn.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  const w = Math.min(300, vw - 24);
+  pop.style.width = `${w}px`;
+  const left = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, vw - 12 - w));
+  const h = pop.offsetHeight;
+  const above = r.bottom + 10 + h > window.innerHeight - 84 && r.top - 10 - h > 70;
+  pop.classList.toggle('above', above);
+  pop.style.left = `${left + window.scrollX}px`;
+  pop.style.top = `${(above ? r.top - 10 - h : r.bottom + 10) + window.scrollY}px`;
+  pop.style.setProperty('--ax', `${Math.max(14, Math.min(r.left + r.width / 2 - left, w - 14))}px`);
+}
+function closeInfo() {
+  const pop = document.getElementById('info-pop');
+  if (!pop || pop.hidden) return;
+  pop.hidden = true; delete pop.dataset.key;
+  document.querySelectorAll('.info-btn[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+}
+function openInfo(btn) {
+  const pop = infoPop();
+  const key = btn.dataset.info;
+  if (!pop.hidden && pop.dataset.key === key) { closeInfo(); return; }
+  closeInfo();
+  pop.querySelector('.ip-body').innerHTML = INFO_TEXT.get(key) || '';
+  pop.dataset.key = key; pop.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  positionInfo(btn);
+}
+// Tras re-pintar (p. ej. en directo) el bocadillo sigue abierto si su ⓘ sigue en pantalla
+function syncInfo() {
+  const pop = document.getElementById('info-pop');
+  if (!pop || pop.hidden) return;
+  const btn = document.querySelector(`.info-btn[data-info="${CSS.escape(pop.dataset.key)}"]`);
+  if (!btn) { closeInfo(); return; }
+  pop.querySelector('.ip-body').innerHTML = INFO_TEXT.get(pop.dataset.key) || '';
+  btn.setAttribute('aria-expanded', 'true');
+  positionInfo(btn);
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.info-btn');
+  if (btn) { e.preventDefault(); e.stopPropagation(); openInfo(btn); return; }
+  const pop = document.getElementById('info-pop');
+  if (!pop || pop.hidden || e.target.closest('#info-pop')) return;
+  closeInfo();
+  // Con el bocadillo abierto, tocar fuera solo lo cierra (no vota ni abre webs sin querer);
+  // las barras de arriba y abajo sí navegan a la primera
+  if (!e.target.closest('.tabbar, .topbar')) { e.preventDefault(); e.stopPropagation(); }
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfo(); });
+window.addEventListener('resize', closeInfo);
+window.addEventListener('hashchange', closeInfo);
+
+// ---------------------------------------------------------------------------
 // Router: #/  #/s/12  #/pool  #/clasificacion  #/perfil  #/nueva
 // ---------------------------------------------------------------------------
 function route() {
@@ -322,6 +395,7 @@ function render() {
   else renderHome();
   restoreLayout(layout);
   hydratePlaces();
+  syncInfo();
 }
 
 function renderLogin() {
@@ -389,9 +463,9 @@ function pending(b) {
 }
 // Participación: cuántos faltan y qué pasa cuando estéis todos
 const PHASE_TEXT = {
-  proposals: { did: 'han propuesto', didOne: 'ha propuesto', last: 'proponga el último', then: 'se cierran las propuestas y empieza la votación', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
-  voting: { did: 'han votado', didOne: 'ha votado', last: 'vote el último', then: 'se cierra la votación y el primero del ranking será el sitio del almuerzo', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
-  rating: { did: 'han puntuado', didOne: 'ha puntuado', last: 'puntúe el último', then: 'se desvela quién propuso el sitio ganador y se lleva sus puntos', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
+  proposals: { did: 'han propuesto', didOne: 'ha propuesto', info: 'Cuando proponga el último, empieza la votación.', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
+  voting: { did: 'han votado', didOne: 'ha votado', info: 'Cuando vote el último, se cierra la votación y el primero del ranking será el sitio del almuerzo.', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
+  rating: { did: 'han puntuado', didOne: 'ha puntuado', info: 'Cuando puntúe el último, se desvela quién propuso el sitio y se lleva sus puntos.', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
 };
 function counter(b) {
   const p = pending(b);
@@ -399,14 +473,13 @@ function counter(b) {
   const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
   const all = p.missing === 0;
   return `
-    <div class="section-title">Participación</div>
+    <div class="section-title">Participación ${info('participacion', all ? t.soon : `${t.info} Es anónimo: nadie sabe quién falta.`)}</div>
     <div class="card counter" aria-live="polite">
       <div class="row">
         <span class="big ${all ? 'ok' : ''}">${all ? '✓' : p.missing}</span>
         <span class="label">${all ? t.all : `de ${p.total} aún no ${p.missing === 1 ? t.didOne : t.did}`}</span>
       </div>
       <div class="bar ${all ? 'ok' : ''}"><i style="width:${pct}%"></i></div>
-      <p class="hint">${all ? t.soon : `En cuanto ${t.last}, ${t.then}. Es anónimo: nadie sabe quién falta.`}</p>
     </div>`;
 }
 function myStatus(b) {
@@ -437,7 +510,7 @@ function nextHead(s) {
   const future = daysUntil(s.lunch_date) >= 0;
   return `
     <div class="session-head next-head">
-      <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · sesión ${s.number}</div>
+      <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · sesión ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos.')}</div>
       <h2>${esc(longDate(s.lunch_date))}${s.lunch_time ? ` <span class="when">· ${esc(hhmm(s.lunch_time))}</span>` : ''}</h2>
       <div class="rel-day">${relDay(s.lunch_date)}</div>
       ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
@@ -446,7 +519,7 @@ function nextHead(s) {
 }
 function history(past) {
   return `
-    <div class="section-title"><span class="grow">Histórico de ganadores</span>${past.length ? `<span class="chip">${past.length} ${past.length === 1 ? 'almuerzo' : 'almuerzos'}</span>` : ''}</div>
+    <div class="section-title"><span class="grow">Histórico de ganadores ${info('historico', 'El sitio que ganó cada almuerzo y quién lo propuso. Toca uno para ver el detalle.')}</span>${past.length ? `<span class="chip">${past.length} ${past.length === 1 ? 'almuerzo' : 'almuerzos'}</span>` : ''}</div>
     ${past.length ? `<div class="past">
       ${past.map((s) => `
         <a class="past-item" href="#/s/${s.id}">
@@ -457,7 +530,7 @@ function history(past) {
           </span>
           ${s.host_id ? avatar(person(s.host_id), 'sm') : ''}
         </a>`).join('')}
-    </div>` : '<div class="card empty" style="padding:20px">Aún no hay almuerzos anteriores. Aquí irá apareciendo el sitio ganador de cada uno.</div>'}`;
+    </div>` : '<div class="card empty" style="padding:20px">Aún no hay almuerzos anteriores.</div>'}`;
 }
 // Secciones de la sesión en curso, en este orden: ranking → tu propuesta → participación
 function activeSections(b) {
@@ -483,8 +556,7 @@ function renderHome() {
     </div>
     <div class="card empty">
       <div class="big">🗓️</div>
-      <strong>No hay ningún almuerzo en marcha</strong>
-      <p class="hint">${isAdmin() ? 'Crea el próximo cuando tengáis fecha: se abrirá el plazo de propuestas para todos.' : 'Cuando el admin ponga fecha al próximo, aparecerá aquí.'}</p>
+      <strong>No hay ningún almuerzo en marcha ${info('sin-sesion', isAdmin() ? 'Créalo cuando tengáis fecha: se abrirá el plazo de propuestas para todo el grupo.' : 'Cuando el admin ponga fecha al próximo, aparecerá aquí.')}</strong>
       ${isAdmin() ? `<button class="btn primary" data-go="#/nueva">${ICON.plus} Crear sesión ${nextNum}</button>` : ''}
     </div>`;
 
@@ -546,10 +618,9 @@ function proposalsView(b) {
   const n = b.proposals.length;
   const ranking = `
     <div class="block-head">
-      <h3>Ranking de sitios para el próximo almuerzo</h3>
-      <div class="sub"><span class="chip">🤫 anónimo</span><span>${n} ${n === 1 ? 'sitio propuesto' : 'sitios propuestos'} · aún sin votos</span></div>
+      <h3>Ranking de sitios para el próximo almuerzo ${info('ranking', 'Los sitios propuestos, sin saber de quién es cada uno. El orden lo decide la votación, que empieza cuando todos hayáis propuesto. Desliza las fotos y toca un sitio para ver su web y su carta.')}</h3>
+      <div class="sub"><span>${n} ${n === 1 ? 'sitio propuesto' : 'sitios propuestos'} · aún sin votos</span></div>
     </div>
-    ${n ? '<p class="hint block-hint">El orden saldrá de la votación, que empieza cuando todos hayáis propuesto. Desliza las fotos y toca un sitio para ver su web y su carta.</p>' : ''}
     ${n ? `<ul class="tiles">
       ${b.proposals.map((p) => `
         <li class="place-tile ${p.mine ? 'mine' : ''}">
@@ -581,7 +652,6 @@ function proposalsView(b) {
         ${mp ? '<button type="button" class="btn ghost" id="prop-cancel">Cancelar</button>' : ''}
         <button class="btn primary" type="submit" ${d.placeId ? '' : 'disabled'}>${mp ? 'Cambiar propuesta' : 'Proponer este sitio'}</button>
       </div>
-      <p class="hint" style="margin:12px 0 0">🤫 Es anónima: nadie verá que es tuya. Solo se sabrá si gana, cuando todos hayan puntuado.</p>
     </form>`;
   const mine = mp ? `
     <div class="card">
@@ -600,7 +670,7 @@ function proposalsView(b) {
 
   return `
     ${ranking}
-    <div class="section-title">Tu propuesta</div>
+    <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Elige un sitio de tu pool. Es anónima: solo se sabrá que era tuya si gana, al final. Puedes cambiarla o retirarla mientras dure el plazo.')}</div>
     ${showForm ? form : mine}
     ${counter(b)}`;
 }
@@ -614,10 +684,9 @@ function votingView(b) {
   const mp = b.my_proposal || b.proposals.find((p) => p.mine);
   return `
     <div class="block-head">
-      <h3>Ranking de sitios para el próximo almuerzo</h3>
+      <h3>Ranking de sitios para el próximo almuerzo ${info('ranking', 'Se ordena en directo por votos, pero nadie ve cuántos tiene cada sitio. Cada uno tiene un voto, secreto y definitivo. Toca un sitio para ver su web y su carta.')}</h3>
       <div class="sub"><span class="live">en directo</span><span>ordenado por votos</span></div>
     </div>
-    <p class="hint block-hint">Nadie ve cuántos votos tiene cada sitio, solo cómo se mueven. Un voto por persona, secreto y definitivo. Toca un sitio para ver su web y su carta.</p>
     <ul class="tiles">
       ${b.proposals.map((p, i) => {
         const m = mv[p.id] && mv[p.id].until > now ? mv[p.id] : null;
@@ -637,16 +706,16 @@ function votingView(b) {
           </li>`;
       }).join('')}
     </ul>
-    <div class="section-title">Tu propuesta</div>
+    <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Tu sitio compite de forma anónima. No puedes votarlo: tu voto tiene que ir a otro, y no se puede cambiar.')}</div>
     <div class="card">
       ${mp ? `
         <div class="mine-row place-card" ${openAttrs(mp.place_id, mp.name)}>
           ${thumb(mp.place_id, '🍽️', 'sm')}
-          <span class="body"><span class="name" style="font:800 17px/1.2 var(--display)">${esc(mp.name)}</span><span class="hint">No puedes votar tu propia propuesta</span></span>
+          <span class="body"><span class="name" style="font:800 17px/1.2 var(--display)">${esc(mp.name)}</span><span class="open-hint">Web y carta ↗</span></span>
         </div>` : '<p class="hint" style="margin:0">No propusiste ningún sitio para este almuerzo.</p>'}
       <div class="vote-status ${voted ? 'ok' : ''}">${voted
-        ? `✅ Has votado <b>«${esc(votedName)}»</b>. Tu voto es secreto y definitivo.`
-        : '🗳️ <b>Te falta votar.</b> Elige tu favorito en el ranking de arriba.'}</div>
+        ? `✅ Has votado <b>«${esc(votedName)}»</b>`
+        : '🗳️ <b>Te falta votar:</b> elige en el ranking de arriba'}</div>
     </div>
     ${counter(b)}`;
 }
@@ -662,18 +731,18 @@ function ratingView(b) {
     <div class="card winner-card" style="margin-top:14px">
       ${winnerPhoto(b)}
       <div class="trophy">🏆</div>
-      <div class="label">Sitio ganador</div>
+      <div class="label">Sitio ganador ${info('ganador', 'El más votado. Quién lo propuso se desvela cuando todo el grupo haya puntuado.')}</div>
       <h3>${esc(b.session.winner_name)}</h3>
       ${b.session.winner_by_draw ? '<span class="chip gold">Empate resuelto por sorteo 🎲</span>' : ''}
-      <div class="mystery">🤫 ¿Quién lo propuso? Se desvelará cuando todo el grupo haya puntuado.</div>
+      <div class="mystery">🤫 ¿Quién lo propuso?</div>
     </div>
-    <div class="section-title"><span class="grow">${b.my_ratings ? 'Tu puntuación (puedes corregirla)' : 'Puntúa el almuerzo'}</span></div>
+    <div class="section-title"><span class="grow">${b.my_ratings ? 'Tu puntuación' : 'Puntúa el almuerzo'} ${info('puntua', 'Del 1 al 10 en cada categoría. Puedes corregirlo hasta que puntúe todo el grupo. La nota del sitio es secreta hasta la gran final.')}</span></div>
     <form class="card" id="rate-form" novalidate>
       ${cats.map((c) => `
         <div class="cat">
           <div class="cat-head">
             <span class="emoji" aria-hidden="true">${esc(c.emoji || '•')}</span>
-            <span class="grow"><strong>${esc(c.label)}</strong>${c.hint ? `<span class="hint">${esc(c.hint)}</span>` : ''}</span>
+            <span class="grow"><strong>${esc(c.label)}</strong>${c.hint ? info(`cat-${c.key}`, esc(c.hint), `Qué se puntúa en ${c.label}`) : ''}</span>
             <span class="val">${d[c.key] ?? '–'}</span>
           </div>
           <div class="ten" role="radiogroup" aria-label="${esc(c.label)}">
@@ -712,7 +781,7 @@ function closedView(b) {
     <div class="card center">
       ${b.final_revealed && b.score !== null
         ? `<div class="hint">Nota del sitio</div><div class="score-big">${num(b.score, 2)}</div><div class="hint">sobre 10</div>`
-        : '<strong>🤫 La nota del sitio es secreta</strong><p class="hint" style="margin:4px 0 0">Se desvelará en la gran final.</p>'}
+        : '<strong>🤫 Nota secreta hasta la gran final</strong>'}
     </div>
     ${b.my_ratings ? `
       <div class="section-title">Tu puntuación</div>
@@ -720,7 +789,7 @@ function closedView(b) {
         ${cats.map((c) => `<div class="s"><b>${b.my_ratings[c.key] ?? '–'}</b>${esc(c.emoji || '')} ${esc(c.label)}</div>`).join('')}
       </div></div>` : ''}
     ${others.length ? `
-      <div class="section-title"><span class="grow">Resto de propuestas</span><span class="chip">anónimas</span></div>
+      <div class="section-title"><span class="grow">Resto de propuestas ${info('resto', 'Los demás sitios de este almuerzo. Siguen siendo anónimos.')}</span></div>
       <ul class="pool">
         ${others.map((p) => `<li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>${thumb(p.place_id, '🍽️', 'sm')}<span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">La tuya</span>' : ''}</span><span class="open-hint">Web ↗</span></li>`).join('')}
       </ul>` : ''}`;
@@ -728,7 +797,6 @@ function closedView(b) {
 
 function adminBox(b) {
   const s = b.session;
-  const p = s.phase !== 'closed' ? pending(b) : null;
   const next = {
     proposals: 'Cerrar propuestas y empezar a votar',
     voting: 'Cerrar la votación',
@@ -736,10 +804,9 @@ function adminBox(b) {
   }[s.phase];
   return `
     <div class="admin-box">
-      <div class="section-title">Admin</div>
+      <div class="section-title">Admin ${info('admin-sesion', 'Cada fase avanza sola cuando participa todo el grupo. Ciérrala a mano solo si alguien no va a participar. Borrar elimina propuestas, votos y notas.')}</div>
       <div class="btn-col">
-        ${next ? `<button class="btn ghost" id="adm-next">${next}</button>
-          <p class="hint" style="margin:-4px 2px 4px">${p.missing ? `Faltan ${p.missing} por ${p.verb}. Normalmente se avanza solo; úsalo si alguien no va a participar.` : 'Se avanzará solo en un momento.'}</p>` : ''}
+        ${next ? `<button class="btn ghost" id="adm-next">${next}</button>` : ''}
         <div class="btn-row">
           <button class="btn ghost" id="adm-edit">Editar fecha</button>
           <button class="btn danger" id="adm-del">Borrar</button>
@@ -882,12 +949,12 @@ function renderNew() {
   $app.innerHTML = `
     ${topbar(`Nueva sesión ${nextNum}`, true)}
     <main>
-      ${busy ? `<div class="card"><strong>Ya hay una sesión en marcha</strong><p class="hint">Termina la sesión ${busy.number} antes de crear otra.</p></div>` : `
+      ${busy ? `<div class="card"><strong>Ya hay una sesión en marcha ${info('busy', `Termina la sesión ${busy.number} antes de crear otra.`)}</strong></div>` : `
+      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearla se abre el plazo de propuestas para todo el grupo. La fecha y la nota se pueden editar después.')}</div>
       <form class="card" id="new-form" novalidate>
         ${sessionFields(v)}
         <div class="error-text" id="new-error" role="alert"></div>
         <button class="btn primary block" type="submit">Crear sesión ${nextNum}</button>
-        <p class="hint" style="margin:12px 0 0">Se abrirá el plazo de propuestas para todo el grupo.</p>
       </form>`}
     </main>
     ${tabbar('home')}`;
@@ -913,16 +980,8 @@ function renderNew() {
 function renderRanking() {
   const lg = state.league;
   const me = state.me.id;
-  const rules = `
-    <div class="card">
-      <strong>Cómo se gana la cena 🍽️</strong>
-      <ol class="rules" style="margin-top:10px">
-        <li>Si tu propuesta gana una sesión, eres el anfitrión: <b>+${lg.host_points} puntos de victoria</b>.</li>
-        <li>En la gran final, a cada anfitrión se le suma la nota de su sitio${Number(lg.score_weight) !== 1 ? ` × ${num(lg.score_weight, 2)}` : ''}.</li>
-        <li>Quien propuso el mejor sitio de todas las sesiones gana <b>+${lg.best_site_bonus} de bonus</b>.</li>
-        <li>El que más puntos sume… ¡está invitado a cenar!</li>
-      </ol>
-    </div>`;
+  const weight = Number(lg.score_weight) !== 1 ? ` (× ${num(lg.score_weight, 2)})` : '';
+  const rules = `Si gana tu propuesta, <b>+${lg.host_points} puntos</b>. En la gran final se suma la nota de tus sitios${weight} y <b>+${lg.best_site_bonus}</b> a quien propuso el mejor. Quien más sume gana la cena 🍽️.`;
 
   let content;
   if (lg.final_revealed && lg.final) {
@@ -936,7 +995,7 @@ function renderRanking() {
           <h2>¡${esc(nameOf(champ.user_id))} está invitado a cenar!</h2>
           <span class="points-badge">${num(champ.total, 2)} puntos</span>
         </div>` : '<div class="card empty">Todavía no hay puntos para decidir un ganador.</div>'}
-      <div class="section-title">Mejores sitios</div>
+      <div class="section-title">Mejores sitios ${info('mejores', 'Nota media de cada sitio ganador, con el detalle por categoría.')}</div>
       <div class="stack-gap">
         ${f.sites.map((st, i) => `
           <div class="card site-row">
@@ -953,7 +1012,7 @@ function renderRanking() {
             </div>` : '<span class="hint">Nadie lo puntuó</span>'}
           </div>`).join('') || '<div class="card empty">Sin sitios puntuados</div>'}
       </div>
-      <div class="section-title">Clasificación final</div>
+      <div class="section-title">Clasificación final ${info('final', rules)}</div>
       <div class="card standings">
         ${f.ranking.map((r, i) => `
           <div class="stand-row ${r.user_id === me ? 'me' : ''}">
@@ -965,11 +1024,10 @@ function renderRanking() {
             </span>
             <span class="pts">${num(r.total, 2)}</span>
           </div>`).join('')}
-      </div>
-      ${rules}`;
+      </div>`;
   } else {
     content = `
-      <div class="section-title"><span class="grow">Puntos de victoria</span><span class="chip">${lg.closed_count} ${lg.closed_count === 1 ? 'sesión cerrada' : 'sesiones cerradas'}</span></div>
+      <div class="section-title"><span class="grow">Puntos de victoria ${info('puntos', `${rules} Las notas son secretas hasta la gran final.`)}</span><span class="chip">${lg.closed_count} ${lg.closed_count === 1 ? 'sesión cerrada' : 'sesiones cerradas'}</span></div>
       <div class="card standings">
         ${lg.standings.map((r, i) => `
           <div class="stand-row ${r.user_id === me ? 'me' : ''}">
@@ -982,12 +1040,7 @@ function renderRanking() {
             <span class="pts">${r.points}<small> pts</small></span>
           </div>`).join('')}
       </div>
-      <div class="card center" style="margin-top:12px">
-        <strong>🤫 Las notas de los sitios son secretas</strong>
-        <p class="hint" style="margin:4px 0 0">Se desvelarán en la gran final, junto al ganador de la cena.</p>
-      </div>
-      <div class="section-title"></div>
-      ${rules}`;
+      `;
   }
 
   $app.innerHTML = `
@@ -996,11 +1049,10 @@ function renderRanking() {
       ${content}
       ${isAdmin() ? `
         <div class="admin-box">
-          <div class="section-title">Admin</div>
+          <div class="section-title">Admin ${info('admin-final', lg.final_revealed ? 'Vuelve a esconder las notas y la clasificación final.' : `Muestra a todo el grupo las notas de los sitios y quién gana la cena. Se puede volver a ocultar.${lg.closed_count ? '' : ' Hace falta al menos una sesión cerrada.'}`)}</div>
           ${lg.final_revealed
             ? '<button class="btn ghost block" id="adm-final">Ocultar la gran final</button>'
-            : `<button class="btn primary block" id="adm-final" ${lg.closed_count ? '' : 'disabled'}>🎉 Revelar la gran final</button>
-               <p class="hint" style="margin:8px 2px 0">${lg.closed_count ? 'Todo el grupo verá las notas y quién gana la cena.' : 'Necesitas al menos una sesión cerrada.'}</p>`}
+            : `<button class="btn primary block" id="adm-final" ${lg.closed_count ? '' : 'disabled'}>🎉 Revelar la gran final</button>`}
         </div>` : ''}
     </main>
     ${tabbar('ranking')}`;
@@ -1038,14 +1090,13 @@ function renderProfile() {
       </div>
       <form id="profile-form" class="card" novalidate>
         <div class="field">
-          <label for="name">Nombre</label>
+          <div class="label-row"><label for="name">Nombre</label>${info('nombre', 'Es como te verá el resto del grupo. Toca la foto de arriba para cambiarla.')}</div>
           <input class="input" id="name" maxlength="40" value="${esc(me.display_name)}" autocomplete="nickname" required>
-          <span class="hint">Así te verá el resto del grupo.</span>
         </div>
         <button class="btn primary block" type="submit">Guardar</button>
       </form>
       ${isAdmin() ? mapsAdminCard() : ''}
-      <div class="section-title">Avisos en este dispositivo</div>
+      <div class="section-title">Avisos en este dispositivo ${info('avisos-disp', 'Se activan en cada móvil por separado. Te avisamos si te retan a una batalla y cuando toque votar o puntuar. Sin teléfono ni email.')}</div>
       ${pushSettings()}
       <div class="section-title">El grupo · ${state.profiles.size}</div>
       <div class="card who-list">
@@ -1320,12 +1371,11 @@ function renderPool() {
   $app.innerHTML = `
     ${topbar('Mi pool')}
     <main>
-      ${open.length ? `<div class="section-title">Mis batallas</div><div class="stack-gap">${open.map(battleCard).join('')}</div>` : ''}
-      <div class="section-title"><span class="grow">Mi pool privado · ${state.pool.length}</span><span class="chip">solo lo ves tú</span></div>
+      ${open.length ? `<div class="section-title">Mis batallas ${info('batallas', 'Se abren cuando dos o más tenéis el mismo sitio en el pool. Quien la provoca gira la ruleta; cada uno juega 3 intentos (cuenta el mejor) y quien más puntos saca se queda el sitio. Rendirte es perderlo.')}</div><div class="stack-gap">${open.map(battleCard).join('')}</div>` : ''}
+      <div class="section-title"><span class="grow">Mi pool privado · ${state.pool.length} ${info('pool', 'Tus sitios candidatos para proponer; solo los ves tú. Búscalos en Google Maps y ponles un nombre. Si otro ya tiene el mismo sitio, se abre una batalla ⚔️.')}</span></div>
       <div class="card">
         ${mapsNotice()}
         <button class="btn primary block" id="pool-search">🔎 Buscar un sitio en Google Maps</button>
-        <p class="hint" style="margin:10px 0 0">Búscalo, ponle un nombre y se añade a tu pool. ⚔️ Si alguien más ya lo tiene, se abre una batalla y quien la gane se lo queda.</p>
       </div>
       ${state.pool.length ? `<ul class="tiles" style="margin-top:12px">
         ${state.pool.map((p) => `
@@ -1336,23 +1386,20 @@ function renderPool() {
               <span class="foot-row"><span class="open-hint">Web ↗</span>${p.battle_id ? '<span class="chip">⚔️ En batalla</span>' : p.proposed ? '<span class="chip">✅ Propuesto</span>' : `<button class="icon-btn small" data-remove="${p.id}" data-name="${esc(p.name)}" aria-label="Quitar ${esc(p.name)}">${ICON.x}</button>`}</span>
             </div>
           </li>`).join('')}
-      </ul>` : '<div class="card empty" style="margin-top:12px;padding:24px">Tu pool está vacío. Añade los sitios que te gustaría proponer.</div>'}
+      </ul>` : '<div class="card empty" style="margin-top:12px;padding:24px">Tu pool está vacío.</div>'}
       ${done.length ? `<div class="section-title">Batallas terminadas</div><div class="stack-gap">${done.map(battleCard).join('')}</div>` : ''}
       ${isAdmin() && B.admin?.length ? `
         <div class="admin-box">
-          <div class="section-title">Admin · batallas abiertas (anónimas)</div>
+          <div class="section-title">Admin · batallas abiertas ${info('admin-batallas', 'Solo si una batalla se atasca: «Girar ruleta» la gira por quien la provocó y «Resolver ya» decide con lo jugado hasta ahora. Los jugadores son anónimos también para ti.')}</div>
           ${B.admin.map((a) => `
             <div class="stand-row">
               <span class="grow"><span class="name">Batalla #${a.id} · ${a.players} jugadores</span>
                 <span class="breakdown">${a.status === 'spin' ? 'Ruleta sin girar' : `${GAMES[a.game]?.name} · han terminado ${a.done} de ${a.players}`}</span></span>
               <button class="btn ghost small" data-force="${a.id}" data-status="${a.status}">${a.status === 'spin' ? 'Girar ruleta' : 'Resolver ya'}</button>
             </div>`).join('')}
-          <p class="hint">Úsalo solo si una batalla se queda atascada. «Resolver ya» decide con lo jugado hasta ahora.</p>
         </div>` : ''}
-      <div class="section-title">🎮 Minijuegos</div>
+      <div class="section-title"><span class="grow">🎮 Minijuegos ${info('minijuegos', 'Deciden las batallas: cuando dos o más queréis el mismo sitio, la ruleta elige uno de estos juegos y quien más puntos saca en 3 intentos se queda el sitio. Aquí los pruebas <b>solo para practicar</b>: no cuenta.')}</span><span class="chip">práctica</span></div>
       <div class="card practice">
-        <p class="practice-why">Sirven para decidir quién se queda un sitio cuando lo queréis dos o más. Aparecen al añadir a tu pool un sitio que otro ya tiene: se abre una <b>batalla</b> ⚔️ y la ruleta elige el juego. Cada uno tiene 3 intentos y quien más puntos saque se lo queda; los demás lo pierden.</p>
-        <p class="practice-note">Aquí puedes probarlos <b>solo para practicar</b>: no cuenta para nada.</p>
         <div class="practice-games">
           ${Object.entries(GAMES).map(([k, g]) => `<button class="practice-game" data-practice="${k}"><span>${g.emoji}</span>${esc(g.name)}${practiceBest(k) !== null ? `<small>Récord: ${practiceBest(k)}</small>` : ''}</button>`).join('')}
         </div>
@@ -1517,11 +1564,10 @@ onMapsAuthError(() => toast('La clave de Google Maps no es válida o no permite 
 function mapsAdminCard() {
   const on = !!state.mapsKey;
   return `
-    <div class="section-title">Admin · Google Maps</div>
+    <div class="section-title">Admin · Google Maps ${info('maps', 'Sirve para buscar sitios, ver sus fotos y descripción y abrir su web. Pega una <b>clave de navegador</b> de Google Maps restringida a esta web.')}</div>
     <div class="card">
       <strong>${on ? '✅ Google Maps configurado' : '⚠️ Falta la clave de Google Maps'}</strong>
-      <p class="hint" style="margin:6px 0 12px">Hace falta para buscar sitios, ver sus fotos y abrir su web. Pega aquí la <b>clave de navegador</b> de Google Maps (restringida a esta web).</p>
-      <div class="field" style="margin-bottom:10px">
+      <div class="field" style="margin:12px 0 10px">
         <input class="input" id="maps-key" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
                placeholder="${on ? 'Pega una clave nueva para cambiarla' : 'AIza…'}">
       </div>
@@ -1680,18 +1726,15 @@ function pushCard(where) {
   const later = where === 'home' ? '<button class="btn ghost small" data-push-dismiss>Ahora no</button>' : '';
   if (st === 'ios-install') return `
     <div class="card push-card">
-      <strong>🔔 Avisos en iPhone</strong>
-      <p class="hint">Para enterarte de batallas y votaciones: en Safari toca <b>Compartir</b> → <b>Añadir a pantalla de inicio</b> y abre la app desde ese icono. Luego actívalos aquí.</p>
-      ${later ? `<div class="btn-row">${later}</div>` : ''}
+      <strong>🔔 Añade la app a tu pantalla de inicio para recibir avisos ${info(`push-ios-${where}`, 'En Safari toca <b>Compartir → Añadir a pantalla de inicio</b>. Abre la app desde ese icono y actívalos aquí. Te avisaremos de batallas y de cuándo toca votar o puntuar.')}</strong>
+      ${later ? `<div class="btn-row" style="margin-top:12px">${later}</div>` : ''}
     </div>`;
   if (st === 'denied') return `
-    <div class="card push-card"><strong>🔕 Avisos bloqueados</strong>
-      <p class="hint">Has bloqueado los avisos para esta web. Actívalos en los ajustes del móvil (Notificaciones) y vuelve aquí.</p></div>`;
+    <div class="card push-card"><strong>🔕 Avisos bloqueados ${info(`push-denied-${where}`, 'Los has bloqueado para esta web. Actívalos en los ajustes del móvil (Notificaciones) y vuelve aquí.')}</strong></div>`;
   return `
     <div class="card push-card">
-      <strong>🔔 Activa los avisos</strong>
-      <p class="hint">Te avisaremos si te retan a una batalla, cuando toque votar o puntuar… Sin teléfono ni email.</p>
-      <div class="btn-row"><button class="btn primary small" data-push-on>Activar avisos</button>${later}</div>
+      <strong>🔔 Activa los avisos ${info(`push-${where}`, 'Te avisamos si te retan a una batalla y cuando toque votar o puntuar. Sin teléfono ni email.')}</strong>
+      <div class="btn-row" style="margin-top:12px"><button class="btn primary small" data-push-on>Activar avisos</button>${later}</div>
     </div>`;
 }
 function pushSettings() {

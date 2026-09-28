@@ -622,3 +622,37 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .vote-status.ok { background: var(--ok-soft); }
 .counter .label { font-weight: 700; }
 .counter .hint { margin: 2px 0 0; line-height: 1.45; }
+
+/* ---------- ⓘ y bocadillo de explicación ---------- */
+.info-btn {
+  position: relative; display: inline-grid; place-items: center; flex: none;
+  width: 24px; height: 24px; margin: -3px 0 -3px 4px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted); vertical-align: middle; cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.info-btn svg { width: 20px; height: 20px; }
+.info-btn::after { content: ""; position: absolute; inset: -10px; }            /* zona de toque cómoda */
+.info-btn[aria-expanded="true"] { background: var(--accent); color: #fff; }
+.eyebrow .info-btn, .winner-card .label .info-btn { color: inherit; opacity: .85; }
+#info-pop {
+  position: absolute; z-index: 15; box-sizing: border-box;
+  padding: 12px 14px; border-radius: 14px;
+  background: var(--text); color: var(--bg);
+  font: 500 14px/1.45 var(--body); text-align: left; letter-spacing: 0; text-transform: none;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .25);
+  animation: ip-in .16s ease-out;
+}
+#info-pop[hidden] { display: none; }
+#info-pop b { font-weight: 700; }
+#info-pop .ip-arrow {
+  position: absolute; top: -6px; left: calc(var(--ax) - 6px); width: 12px; height: 12px;
+  background: inherit; transform: rotate(45deg); border-radius: 2px;
+}
+#info-pop.above .ip-arrow { top: auto; bottom: -6px; }
+@keyframes ip-in { from { opacity: 0; transform: translateY(-4px); } }
+#info-pop.above { animation-name: ip-in-up; }
+@keyframes ip-in-up { from { opacity: 0; transform: translateY(4px); } }
+.label-row { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; }
+.label-row label { margin: 0; }
+.cat-head .grow { display: flex; align-items: center; }
+.push-card strong { display: block; line-height: 1.35; }
