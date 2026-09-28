@@ -702,3 +702,46 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .mine-actions .icon-btn.small svg { width: 16px; height: 16px; }
 .icon-btn.danger { color: var(--danger); }
 .mine-card .vote-status { margin-top: 10px; padding: 8px 10px; font-size: 13.5px; }
+
+/* ---------- Animación de bienvenida (≈1,9 s al abrir la app) ---------- */
+#intro {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 40%, color-mix(in srgb, var(--accent) 14%, var(--bg)) 0%, var(--bg) 62%);
+  color: var(--text); cursor: pointer; -webkit-user-select: none; user-select: none;
+  animation: in-out .38s cubic-bezier(.4, 0, .6, 1) 1.52s forwards;
+}
+#intro.skip { animation: in-out .2s ease-in forwards; }
+#intro .in-wrap { display: grid; justify-items: center; transform: translateY(-3vh); }
+#intro .in-stage { position: relative; width: 120px; height: 120px; margin-bottom: 22px; }
+#intro .in-logo { position: relative; z-index: 2; display: block; width: 120px; height: 120px;
+  filter: drop-shadow(0 14px 26px rgb(217 72 15 / .35));
+  animation: in-pop .62s cubic-bezier(.34, 1.56, .64, 1) both; }
+#intro .in-bocata { transform-box: view-box; transform-origin: 256px 256px; animation: in-bocata .5s .16s cubic-bezier(.34, 1.56, .64, 1) both; }
+#intro .in-tick-bg { transform-box: view-box; transform-origin: 392px 392px; animation: in-scale .34s .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+#intro .in-tick { stroke-dasharray: 130; stroke-dashoffset: 130; animation: in-draw .28s .72s ease-out forwards; }
+#intro .in-glow { position: absolute; inset: -40px; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 45%, transparent) 0%, transparent 68%);
+  animation: in-glow 1.1s .05s ease-out both; }
+#intro .in-food { position: absolute; left: 50%; top: 50%; z-index: 1; font-size: 30px; line-height: 1; margin: -15px 0 0 -15px; opacity: 0;
+  animation: in-burst .9s cubic-bezier(.2, .8, .3, 1) calc(.42s + var(--d)) both; }
+#intro .in-title { margin: 0; text-align: center; font: 800 38px/1 var(--display); letter-spacing: -.02em; }
+#intro .in-title .w1 { display: block; animation: in-up .45s .34s cubic-bezier(.2, .8, .2, 1) both; }
+#intro .in-title .w2 { display: block; margin-top: 8px; font-size: 19px; letter-spacing: .24em; color: var(--accent); }
+#intro .in-title .w2 span { display: inline-block; animation: in-letter .32s cubic-bezier(.34, 1.56, .64, 1) both; animation-delay: calc(.52s + var(--i) * 34ms); }
+#intro .in-title .w2 .sp { width: .35em; }
+#intro .in-hi { margin: 18px 0 0; font: 600 18px/1.2 var(--body); color: var(--muted); animation: in-up .4s .95s ease-out both; }
+@keyframes in-pop    { from { opacity: 0; transform: scale(.3) rotate(-14deg); } }
+@keyframes in-bocata { from { opacity: 0; transform: translateX(-140px) rotate(-40deg); } }
+@keyframes in-scale  { from { opacity: 0; transform: scale(0); } }
+@keyframes in-draw   { to { stroke-dashoffset: 0; } }
+@keyframes in-glow   { 0% { opacity: 0; transform: scale(.2); } 45% { opacity: 1; } 100% { opacity: .55; transform: scale(1.15); } }
+@keyframes in-burst  { 0% { opacity: 0; transform: translate(0, 0) scale(.3) rotate(0); }
+                       35% { opacity: 1; }
+                       100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1.1) rotate(var(--r)); } }
+@keyframes in-up     { from { opacity: 0; transform: translateY(14px); } }
+@keyframes in-letter { from { opacity: 0; transform: translateY(10px) scale(.4); } }
+@keyframes in-out    { to { opacity: 0; transform: scale(1.06); visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  #intro, #intro * { animation-duration: .01s !important; animation-delay: 0s !important; }
+  #intro { animation: in-out .3s ease 1.2s forwards !important; }
+}

@@ -17,11 +17,51 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script type="module" src="app.js?v=16"></script>
+  <script type="module" src="app.js?v=17"></script>
 </head>
 <body>
+  <div id="intro" aria-hidden="true">
+    <div class="in-wrap">
+      <div class="in-stage">
+        <span class="in-glow"></span>
+        <span class="in-food" style="--x:-118px;--y:-70px;--r:-25deg;--d:0ms">🥖</span>
+        <span class="in-food" style="--x:120px;--y:-62px;--r:30deg;--d:40ms">☕</span>
+        <span class="in-food" style="--x:-104px;--y:66px;--r:20deg;--d:80ms">🫒</span>
+        <span class="in-food" style="--x:110px;--y:74px;--r:-20deg;--d:60ms">🥜</span>
+        <span class="in-food" style="--x:0px;--y:-122px;--r:12deg;--d:20ms">🍺</span>
+        <svg class="in-logo" viewBox="0 0 512 512" width="120" height="120">
+          <rect width="512" height="512" rx="112" fill="#d9480f"/>
+          <g class="in-bocata"><g transform="rotate(-18 256 256)">
+            <rect x="86" y="196" width="340" height="120" rx="60" fill="#f7c873"/>
+            <rect x="86" y="248" width="340" height="30" fill="#6a9a3a"/>
+            <rect x="86" y="238" width="340" height="16" fill="#c92a2a"/>
+            <rect x="86" y="196" width="340" height="52" rx="26" fill="#f2b555"/>
+            <path d="M150 206 l24 22 M220 204 l24 22 M290 204 l24 22 M360 206 l24 22" stroke="#d98d2b" stroke-width="12" stroke-linecap="round"/>
+          </g></g>
+          <circle class="in-tick-bg" cx="392" cy="392" r="70" fill="#fff"/>
+          <path class="in-tick" d="M358 392 l24 24 l46 -50" fill="none" stroke="#2b8a3e" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="in-title"><span class="w1">Almuerzos</span><span class="w2"><span style="--i:0">M</span><span style="--i:1">U</span><span style="--i:2">Y</span><span class="sp"> </span><span style="--i:4">T</span><span style="--i:5">O</span><span style="--i:6">C</span><span style="--i:7">H</span><span style="--i:8">O</span><span style="--i:9">S</span></span></h1>
+      <p class="in-hi" id="intro-hi">¡Hola! 👋</p>
+    </div>
+  </div>
+  <script>
+    // Bienvenida al abrir la app (máx. 2 s). Tocar la salta.
+    (function () {
+      var el = document.getElementById('intro');
+      try {
+        var n = localStorage.getItem('almuerzos-name');
+        if (n) document.getElementById('intro-hi').textContent = '¡Hola, ' + n.trim().split(/\s+/)[0] + '! 👋';
+      } catch (e) {}
+      var done = false;
+      function end() { if (!done) { done = true; el.remove(); } }
+      el.addEventListener('click', function () { el.classList.add('skip'); setTimeout(end, 220); });
+      setTimeout(end, 1920);
+    })();
+  </script>
   <div id="app" aria-live="polite">
     <div class="splash"><div class="spinner" aria-label="Cargando"></div></div>
   </div>
