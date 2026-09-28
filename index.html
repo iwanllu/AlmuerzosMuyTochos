@@ -17,49 +17,246 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="stylesheet" href="styles.css?v=16">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script type="module" src="app.js?v=17"></script>
+  <script type="module" src="app.js?v=18"></script>
 </head>
 <body>
   <div id="intro" aria-hidden="true">
     <div class="in-wrap">
-      <div class="in-stage">
-        <span class="in-glow"></span>
-        <span class="in-food" style="--x:-118px;--y:-70px;--r:-25deg;--d:0ms">🥖</span>
-        <span class="in-food" style="--x:120px;--y:-62px;--r:30deg;--d:40ms">☕</span>
-        <span class="in-food" style="--x:-104px;--y:66px;--r:20deg;--d:80ms">🫒</span>
-        <span class="in-food" style="--x:110px;--y:74px;--r:-20deg;--d:60ms">🥜</span>
-        <span class="in-food" style="--x:0px;--y:-122px;--r:12deg;--d:20ms">🍺</span>
-        <svg class="in-logo" viewBox="0 0 512 512" width="120" height="120">
-          <rect width="512" height="512" rx="112" fill="#d9480f"/>
-          <g class="in-bocata"><g transform="rotate(-18 256 256)">
-            <rect x="86" y="196" width="340" height="120" rx="60" fill="#f7c873"/>
-            <rect x="86" y="248" width="340" height="30" fill="#6a9a3a"/>
-            <rect x="86" y="238" width="340" height="16" fill="#c92a2a"/>
-            <rect x="86" y="196" width="340" height="52" rx="26" fill="#f2b555"/>
-            <path d="M150 206 l24 22 M220 204 l24 22 M290 204 l24 22 M360 206 l24 22" stroke="#d98d2b" stroke-width="12" stroke-linecap="round"/>
-          </g></g>
-          <circle class="in-tick-bg" cx="392" cy="392" r="70" fill="#fff"/>
-          <path class="in-tick" d="M358 392 l24 24 l46 -50" fill="none" stroke="#2b8a3e" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <h1 class="in-title"><span class="w1">Almuerzos</span><span class="w2"><span style="--i:0">M</span><span style="--i:1">U</span><span style="--i:2">Y</span><span class="sp"> </span><span style="--i:4">T</span><span style="--i:5">O</span><span style="--i:6">C</span><span style="--i:7">H</span><span style="--i:8">O</span><span style="--i:9">S</span></span></h1>
-      <p class="in-hi" id="intro-hi">¡Hola! 👋</p>
+      <svg class="in-scene" viewBox="0 0 360 330" role="img" aria-label="Esmorzaret valencià">
+        <defs>
+          <!-- Rajola valenciana (azulejo) -->
+          <pattern id="az" width="44" height="44" patternUnits="userSpaceOnUse">
+            <rect width="44" height="44" fill="#fbf1dc"/>
+            <path d="M0 0H44V44H0Z" fill="none" stroke="#e6d4b0" stroke-width="1.2"/>
+            <g fill="#2f8f5b"><circle cx="0" cy="0" r="7"/><circle cx="44" cy="0" r="7"/><circle cx="0" cy="44" r="7"/><circle cx="44" cy="44" r="7"/></g>
+            <g fill="#f2b705"><circle cx="0" cy="0" r="3"/><circle cx="44" cy="0" r="3"/><circle cx="0" cy="44" r="3"/><circle cx="44" cy="44" r="3"/></g>
+            <g fill="#1f5aa6">
+              <path d="M22 6 C27 12 27 17 22 22 C17 17 17 12 22 6Z"/>
+              <path d="M22 38 C27 32 27 27 22 22 C17 27 17 32 22 38Z"/>
+              <path d="M6 22 C12 17 17 17 22 22 C17 27 12 27 6 22Z"/>
+              <path d="M38 22 C32 17 27 17 22 22 C27 27 32 27 38 22Z"/>
+            </g>
+            <g fill="none" stroke="#1f5aa6" stroke-width="1.4" stroke-linecap="round">
+              <path d="M10 10 L15 15 M34 10 L29 15 M10 34 L15 29 M34 34 L29 29"/>
+            </g>
+            <circle cx="22" cy="22" r="4.2" fill="#f2b705" stroke="#c0392b" stroke-width="1.2"/>
+          </pattern>
+          <!-- Mantel de cuadros -->
+          <pattern id="ging" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="scale(1 .55) rotate(0)">
+            <rect width="18" height="18" fill="#fff"/>
+            <rect width="18" height="9" fill="#e03131" opacity=".45"/>
+            <rect width="9" height="18" fill="#e03131" opacity=".45"/>
+          </pattern>
+          <radialGradient id="wallFade" cx="50%" cy="45%" r="62%">
+            <stop offset="55%" stop-color="#fff" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </radialGradient>
+          <mask id="wallMask"><rect width="360" height="330" fill="url(#wallFade)"/></mask>
+          <linearGradient id="beer" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffd24d"/><stop offset="1" stop-color="#e8890c"/>
+          </linearGradient>
+          <linearGradient id="bread" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f6c16a"/><stop offset="1" stop-color="#d98a2b"/>
+          </linearGradient>
+          <linearGradient id="orange" x1=".2" y1=".1" x2=".8" y2="1">
+            <stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#f06d06"/>
+          </linearGradient>
+          <linearGradient id="coffee" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#c7772c"/><stop offset=".32" stop-color="#8a4413"/><stop offset="1" stop-color="#3d1c08"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Pared de azulejos del bar -->
+        <g class="sc-wall">
+          <rect x="14" y="6" width="332" height="224" rx="26" fill="#fbf1dc" mask="url(#wallMask)" opacity=".92"/>
+        <rect x="14" y="6" width="332" height="224" rx="26" fill="url(#az)" mask="url(#wallMask)" opacity=".5"/>
+          <rect x="14" y="196" width="332" height="10" fill="#1f5aa6" opacity=".18" mask="url(#wallMask)"/>
+        </g>
+
+        <!-- Taronges -->
+        <g class="sc-orange sc-orange-l">
+          <circle cx="44" cy="42" r="22" fill="url(#orange)" stroke="#3a2416" stroke-width="3"/>
+          <ellipse cx="36" cy="34" rx="6" ry="4" fill="#fff" opacity=".45" transform="rotate(-30 36 34)"/>
+          <g fill="#c85a00" opacity=".5"><circle cx="50" cy="48" r="1.2"/><circle cx="44" cy="54" r="1.2"/><circle cx="54" cy="40" r="1.2"/></g>
+          <path d="M46 21 C54 10 68 12 72 18 C64 24 54 24 46 21Z" fill="#2f9e44" stroke="#3a2416" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M46 21 L60 17" stroke="#1b6e2e" stroke-width="1.5"/>
+          <g transform="translate(24 16)"><g fill="#fff" stroke="#3a2416" stroke-width="1.5"><circle cx="0" cy="-5" r="3.2"/><circle cx="4.8" cy="-1.5" r="3.2"/><circle cx="3" cy="4" r="3.2"/><circle cx="-3" cy="4" r="3.2"/><circle cx="-4.8" cy="-1.5" r="3.2"/></g><circle r="2" fill="#f2b705"/></g>
+        </g>
+        <g class="sc-orange sc-orange-r">
+          <circle cx="318" cy="36" r="19" fill="url(#orange)" stroke="#3a2416" stroke-width="3"/>
+          <ellipse cx="311" cy="29" rx="5" ry="3.5" fill="#fff" opacity=".45" transform="rotate(-30 311 29)"/>
+          <path d="M316 18 C308 8 294 10 290 16 C298 22 308 22 316 18Z" fill="#2f9e44" stroke="#3a2416" stroke-width="2.5" stroke-linejoin="round"/>
+          <g transform="translate(340 20)"><g fill="#fff" stroke="#3a2416" stroke-width="1.5"><circle cx="0" cy="-5" r="3"/><circle cx="4.6" cy="-1.5" r="3"/><circle cx="2.8" cy="4" r="3"/><circle cx="-2.8" cy="4" r="3"/><circle cx="-4.6" cy="-1.5" r="3"/></g><circle r="1.9" fill="#f2b705"/></g>
+        </g>
+
+        <!-- Mesa con mantel de cuadros -->
+        <g class="sc-table">
+          <ellipse cx="180" cy="272" rx="172" ry="52" fill="#b8322b" stroke="#3a2416" stroke-width="3"/>
+          <ellipse cx="180" cy="262" rx="172" ry="50" fill="url(#ging)" stroke="#3a2416" stroke-width="3"/>
+          <ellipse cx="180" cy="262" rx="150" ry="38" fill="#fff" opacity=".12"/>
+        </g>
+
+        <!-- Jarra de cerveza -->
+        <g class="sc-item sc-beer">
+          <ellipse cx="74" cy="242" rx="30" ry="6" fill="#3a2416" opacity=".18"/>
+          <path d="M98 150 C124 150 126 206 98 206" fill="none" stroke="#3a2416" stroke-width="11" stroke-linecap="round"/>
+          <path d="M98 150 C124 150 126 206 98 206" fill="none" stroke="#fff3d6" stroke-width="5" stroke-linecap="round"/>
+          <path d="M46 134 L102 134 L98 234 Q98 242 90 242 L58 242 Q50 242 50 234 Z" fill="url(#beer)" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+          <rect x="57" y="144" width="7" height="88" rx="3.5" fill="#fff" opacity=".45"/>
+          <g class="sc-bubbles" fill="#fff" opacity=".85">
+            <circle cx="76" cy="226" r="2.4" style="--b:0ms"/><circle cx="86" cy="220" r="1.8" style="--b:280ms"/>
+            <circle cx="70" cy="214" r="1.6" style="--b:520ms"/><circle cx="82" cy="230" r="2" style="--b:760ms"/>
+          </g>
+          <path d="M42 138 C36 122 52 110 62 118 C66 104 88 104 92 116 C104 108 114 124 106 138 C104 144 98 142 96 140 L96 150 C96 156 88 156 88 150 L88 142 C74 146 56 146 46 142 C43 141 42 140 42 138Z" fill="#fffaf0" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+          <g fill="#fff" stroke="#e8d8b8" stroke-width="1"><circle cx="58" cy="128" r="3"/><circle cx="80" cy="120" r="2.5"/><circle cx="96" cy="130" r="2"/></g>
+        </g>
+
+        <!-- Cassola de fang con cacaus del collaret y olivas -->
+        <g class="sc-item sc-bowl"><g transform="translate(0 -18)">
+          <ellipse cx="146" cy="244" rx="34" ry="6" fill="#3a2416" opacity=".18"/>
+          <g stroke="#3a2416" stroke-width="2.2" stroke-linejoin="round">
+            <path d="M126 214 C120 206 128 198 136 202 C140 196 150 198 148 206 C150 212 142 218 136 214 C132 220 124 220 126 214Z" fill="#e8c592"/>
+            <path d="M150 208 C150 198 160 196 164 202 C170 200 176 208 170 214 C168 220 158 220 156 214 C150 216 148 212 150 208Z" fill="#dcb47c"/>
+            <ellipse cx="158" cy="222" rx="7.5" ry="5.5" fill="#8fb339"/>
+            <ellipse cx="133" cy="223" rx="7.5" ry="5.5" fill="#7a9e2e"/>
+            <ellipse cx="146" cy="215" rx="7" ry="5.2" fill="#9cbf45"/>
+            <circle cx="120" cy="224" r="4.5" fill="#f5d547"/><circle cx="170" cy="224" r="4.5" fill="#f5d547"/>
+          </g>
+          <g fill="#c79a5b" opacity=".6"><circle cx="131" cy="206" r="1"/><circle cx="160" cy="205" r="1"/></g>
+          <path d="M108 222 L184 222 C182 238 168 246 146 246 C124 246 110 238 108 222Z" fill="#c4622d" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+          <ellipse cx="146" cy="222" rx="38" ry="5" fill="#dd7a3f" stroke="#3a2416" stroke-width="3"/>
+          <path d="M118 232 C128 238 162 238 174 232" fill="none" stroke="#f0a36b" stroke-width="2.5" stroke-linecap="round" opacity=".8"/>
+        </g></g>
+
+        <!-- Cremaet con su llama -->
+        <g class="sc-item sc-cremaet">
+          <ellipse cx="226" cy="244" rx="30" ry="6" fill="#3a2416" opacity=".18"/>
+          <rect x="188" y="236" width="10" height="5" rx="2" fill="#6b3b12" transform="rotate(-20 193 238)"/>
+          <ellipse cx="258" cy="240" rx="4.5" ry="3" fill="#5a2d0c" stroke="#3a2416" stroke-width="1.5"/>
+          <ellipse cx="266" cy="243" rx="4.5" ry="3" fill="#5a2d0c" stroke="#3a2416" stroke-width="1.5"/>
+          <path d="M205 176 L210 146" stroke="#3a2416" stroke-width="9" stroke-linecap="round"/>
+          <path d="M205 176 L210 146" stroke="#a0522d" stroke-width="5" stroke-linecap="round"/>
+          <path d="M202 174 L250 174 L246 236 Q246 242 240 242 L212 242 Q206 242 206 236 Z" fill="url(#coffee)"/>
+          <path d="M202 174 L250 174 L249 188 L203 188 Z" fill="#e9a53a" opacity=".85"/>
+          <path d="M202 174 L250 174 L246 236 Q246 242 240 242 L212 242 Q206 242 206 236 Z" fill="none" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+          <rect x="210" y="180" width="5" height="54" rx="2.5" fill="#fff" opacity=".35"/>
+          <path d="M248 172 C258 170 262 180 256 188 C252 194 256 200 262 198" fill="none" stroke="#3a2416" stroke-width="7" stroke-linecap="round"/>
+          <path d="M248 172 C258 170 262 180 256 188 C252 194 256 200 262 198" fill="none" stroke="#ffd43b" stroke-width="3.5" stroke-linecap="round"/>
+          <g class="sc-flame">
+            <path d="M226 176 C204 160 214 140 212 118 C226 132 230 116 234 104 C240 124 254 138 244 160 C240 170 234 176 226 176Z" fill="#ff922b" stroke="#3a2416" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M227 174 C214 164 220 150 220 136 C228 146 232 138 234 128 C240 144 246 156 238 166 C236 172 232 174 227 174Z" fill="#ffd43b"/>
+            <path d="M227 175 C220 170 222 162 224 156 C228 160 232 158 233 154 C236 162 236 170 231 174Z" fill="#4dabf7"/>
+          </g>
+        </g>
+
+        <!-- Botella y chupito de cazalla -->
+        <g class="sc-item sc-cazalla">
+          <ellipse cx="304" cy="244" rx="34" ry="6" fill="#3a2416" opacity=".18"/>
+          <rect x="309" y="102" width="16" height="12" rx="3" fill="#c92a2a" stroke="#3a2416" stroke-width="2.5"/>
+          <path d="M311 114 L323 114 L323 138 C323 146 336 148 336 160 L336 234 Q336 242 328 242 L306 242 Q298 242 298 234 L298 160 C298 148 311 146 311 138 Z" fill="#e7f5ff" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M300 172 L334 172 L334 234 Q334 240 328 240 L306 240 Q300 240 300 234 Z" fill="#d0ebff" opacity=".9"/>
+          <rect x="303" y="182" width="28" height="34" rx="3" fill="#fff4d6" stroke="#3a2416" stroke-width="2"/>
+          <text x="317" y="194" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="5.6" font-weight="700" fill="#c92a2a" textLength="23" lengthAdjust="spacingAndGlyphs">CAZALLA</text>
+          <g transform="translate(317 205)" fill="#8a4b1f" stroke="#3a2416" stroke-width=".8">
+            <path d="M0 -7 L1.6 -2 L6.6 -2.2 L2.6 1 L4.2 6 L0 3 L-4.2 6 L-2.6 1 L-6.6 -2.2 L-1.6 -2 Z"/>
+          </g>
+          <rect x="303" y="124" width="4" height="100" rx="2" fill="#fff" opacity=".55"/>
+          <path d="M262 206 L290 206 L286 240 Q286 243 283 243 L269 243 Q266 243 266 240 Z" fill="#f1f8ff" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M264 216 L288 216 L285.5 238 L266.5 238 Z" fill="#cfe8ff"/>
+          <rect x="269" y="210" width="3" height="26" rx="1.5" fill="#fff" opacity=".8"/>
+        </g>
+
+        <!-- Bravas con alioli -->
+        <g class="sc-item sc-bravas">
+          <ellipse cx="296" cy="292" rx="52" ry="17" fill="#fff" stroke="#3a2416" stroke-width="3"/>
+          <ellipse cx="296" cy="290" rx="40" ry="11" fill="#f1f3f5"/>
+          <g stroke="#3a2416" stroke-width="2" stroke-linejoin="round">
+            <rect x="266" y="272" width="16" height="15" rx="4" fill="#f7c95c" transform="rotate(-12 274 280)"/>
+            <rect x="283" y="266" width="16" height="15" rx="4" fill="#f4bb45" transform="rotate(8 291 273)"/>
+            <rect x="300" y="270" width="16" height="15" rx="4" fill="#f7c95c" transform="rotate(-6 308 277)"/>
+            <rect x="316" y="276" width="15" height="14" rx="4" fill="#efb03b" transform="rotate(14 323 283)"/>
+            <rect x="279" y="281" width="16" height="14" rx="4" fill="#f4bb45" transform="rotate(4 287 288)"/>
+            <rect x="297" y="283" width="16" height="14" rx="4" fill="#f7c95c" transform="rotate(-10 305 290)"/>
+          </g>
+          <path d="M270 276 C278 268 290 272 296 266 C304 262 314 270 322 276 C312 282 300 278 292 284 C284 288 274 284 270 276Z" fill="#d9381e" opacity=".92"/>
+          <path d="M272 283 L279 277 L286 283 L293 276 L300 283 L307 276 L314 283 L321 278" fill="none" stroke="#fffdf5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M288 270 L280 250" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M288 270 L280 250" stroke="#e9c48f" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M306 272 L316 252" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M306 272 L316 252" stroke="#e9c48f" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
+
+        <!-- El bocata tocho -->
+        <g class="sc-item sc-bocata">
+          <ellipse cx="160" cy="296" rx="112" ry="10" fill="#3a2416" opacity=".18"/>
+          <g transform="translate(160 270) scale(.9) translate(-160 -262) rotate(-5 160 262)">
+            <path d="M50 274 C50 262 64 258 86 258 L236 258 C260 258 272 264 272 276 C272 290 256 296 234 296 L84 296 C62 296 50 288 50 274Z" fill="#dc9a45" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M56 252 C78 262 94 244 112 254 C130 264 146 244 164 254 C182 264 198 244 216 254 C234 264 250 246 270 254 L268 266 L58 266Z" fill="#69b93b" stroke="#3a2416" stroke-width="2.5" stroke-linejoin="round"/>
+            <g stroke="#3a2416" stroke-width="2.2">
+              <path d="M78 258 C78 244 104 244 104 258Z" fill="#e8403a"/>
+              <path d="M132 258 C132 244 158 244 158 258Z" fill="#e8403a"/>
+              <path d="M106 259 C106 248 128 248 128 259Z" fill="#8b3a1a"/>
+              <path d="M160 259 C160 248 182 248 182 259Z" fill="#8b3a1a"/>
+              <path d="M186 258 C186 244 212 244 212 258Z" fill="#e8403a"/>
+              <path d="M214 259 C214 248 234 248 234 259Z" fill="#8b3a1a"/>
+            </g>
+            <g transform="translate(12 -2)"><path d="M232 262 C228 250 246 244 258 248 C272 244 284 252 278 262 C274 270 262 268 252 266 C242 270 234 268 232 262Z" fill="#fffdf7" stroke="#3a2416" stroke-width="2.5" stroke-linejoin="round"/>
+            <circle cx="258" cy="256" r="6.5" fill="#ffb700" stroke="#3a2416" stroke-width="2"/>
+            <circle cx="256" cy="254" r="2" fill="#fff" opacity=".8"/></g>
+            <g transform="translate(0 -11)"><path d="M48 250 C48 232 70 224 96 224 L232 224 C260 224 276 232 276 248 C276 256 268 260 254 260 L72 260 C58 260 48 258 48 250Z" fill="url(#bread)" stroke="#3a2416" stroke-width="3" stroke-linejoin="round"/>
+            <g fill="none" stroke="#b86f22" stroke-width="3" stroke-linecap="round">
+              <path d="M88 232 C94 240 100 242 108 242"/><path d="M128 230 C134 238 140 240 148 240"/>
+              <path d="M168 230 C174 238 180 240 188 240"/><path d="M208 230 C214 238 220 240 228 240"/>
+            </g>
+            <path d="M66 236 C80 228 110 227 130 228" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".45"/>
+            <g fill="#fff" opacity=".7"><circle cx="118" cy="233" r="1.2"/><circle cx="158" cy="231" r="1.2"/><circle cx="196" cy="233" r="1.2"/><circle cx="236" cy="236" r="1.2"/><circle cx="84" cy="243" r="1.2"/></g></g>
+          </g>
+        </g>
+
+        <!-- Mascletà -->
+        <g class="sc-boom sc-boom1" transform="translate(88 70)"><g class="sc-boom-in">
+          <g stroke="#f2b705" stroke-width="3" stroke-linecap="round"><path d="M0 -14 V-26"/><path d="M0 14 V26"/><path d="M-14 0 H-26"/><path d="M14 0 H26"/></g>
+          <g stroke="#e03131" stroke-width="3" stroke-linecap="round"><path d="M10 -10 L18 -18"/><path d="M-10 10 L-18 18"/><path d="M-10 -10 L-18 -18"/><path d="M10 10 L18 18"/></g>
+          <circle r="5" fill="#fff5bf"/>
+        </g></g>
+        <g class="sc-boom sc-boom2" transform="translate(272 84)"><g class="sc-boom-in">
+          <g stroke="#e03131" stroke-width="3" stroke-linecap="round"><path d="M0 -12 V-24"/><path d="M0 12 V24"/><path d="M-12 0 H-24"/><path d="M12 0 H24"/></g>
+          <g stroke="#f2b705" stroke-width="3" stroke-linecap="round"><path d="M9 -9 L16 -16"/><path d="M-9 9 L-16 16"/><path d="M-9 -9 L-16 -16"/><path d="M9 9 L16 16"/></g>
+          <circle r="4.5" fill="#fff5bf"/>
+        </g></g>
+        <g class="sc-boom sc-boom3" transform="translate(180 40)"><g class="sc-boom-in">
+          <g stroke="#f2b705" stroke-width="2.6" stroke-linecap="round"><path d="M0 -10 V-20"/><path d="M0 10 V20"/><path d="M-10 0 H-20"/><path d="M10 0 H20"/></g>
+          <g stroke="#1f5aa6" stroke-width="2.6" stroke-linecap="round"><path d="M8 -8 L14 -14"/><path d="M-8 8 L-14 14"/><path d="M-8 -8 L-14 -14"/><path d="M8 8 L14 14"/></g>
+          <circle r="4" fill="#fff5bf"/>
+        </g></g>
+        <g class="sc-boom sc-boom4" transform="translate(40 150)"><g class="sc-boom-in">
+        <g stroke="#e03131" stroke-width="3.2" stroke-linecap="round"><path d="M0 -11 V-22"/><path d="M0 11 V22"/><path d="M-11 0 H-22"/><path d="M11 0 H22"/></g>
+        <g stroke="#f2b705" stroke-width="3.2" stroke-linecap="round"><path d="M8 -8 L15 -15"/><path d="M-8 8 L-15 15"/><path d="M-8 -8 L-15 -15"/><path d="M8 8 L15 15"/></g>
+        <g fill="#e03131"><circle cx="0" cy="-28" r="2.2"/><circle cx="28" cy="0" r="2.2"/><circle cx="0" cy="28" r="2.2"/><circle cx="-28" cy="0" r="2.2"/></g>
+        <circle r="5.0" fill="#fff5bf"/>
+      </g></g>
+      <g class="sc-boom sc-boom5" transform="translate(322 150)"><g class="sc-boom-in">
+        <g stroke="#f2b705" stroke-width="3.2" stroke-linecap="round"><path d="M0 -11 V-22"/><path d="M0 11 V22"/><path d="M-11 0 H-22"/><path d="M11 0 H22"/></g>
+        <g stroke="#e03131" stroke-width="3.2" stroke-linecap="round"><path d="M8 -8 L15 -15"/><path d="M-8 8 L-15 15"/><path d="M-8 -8 L-15 -15"/><path d="M8 8 L15 15"/></g>
+        <g fill="#f2b705"><circle cx="0" cy="-28" r="2.2"/><circle cx="28" cy="0" r="2.2"/><circle cx="0" cy="28" r="2.2"/><circle cx="-28" cy="0" r="2.2"/></g>
+        <circle r="5.0" fill="#fff5bf"/>
+      </g></g>
+    </svg>
+
+      <h1 class="in-title"><span class="t1"><span style="--i:0">A</span><span style="--i:1">L</span><span style="--i:2">M</span><span style="--i:3">U</span><span style="--i:4">E</span><span style="--i:5">R</span><span style="--i:6">Z</span><span style="--i:7">O</span><span style="--i:8">S</span></span><span class="ribbon"><span class="rb-text">MUY TOCHOS</span></span></h1>
+      <p class="in-tag">¡Bon profit!</p>
     </div>
   </div>
   <script>
-    // Bienvenida al abrir la app (máx. 2 s). Tocar la salta.
+    // Bienvenida al abrir la app: 3 s. Tocar la salta.
     (function () {
       var el = document.getElementById('intro');
-      try {
-        var n = localStorage.getItem('almuerzos-name');
-        if (n) document.getElementById('intro-hi').textContent = '¡Hola, ' + n.trim().split(/\s+/)[0] + '! 👋';
-      } catch (e) {}
       var done = false;
       function end() { if (!done) { done = true; el.remove(); } }
-      el.addEventListener('click', function () { el.classList.add('skip'); setTimeout(end, 220); });
-      setTimeout(end, 1920);
+      el.addEventListener('click', function () { el.classList.add('skip'); setTimeout(end, 250); });
+      setTimeout(end, 3000);
     })();
   </script>
   <div id="app" aria-live="polite">

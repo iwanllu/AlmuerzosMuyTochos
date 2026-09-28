@@ -154,7 +154,6 @@ async function loadAll() {
   state.battles = bt.data;
   state.profiles = new Map(pr.data.map((p) => [p.id, p]));
   state.me = state.profiles.get(state.session.user.id) || null;
-  if (state.me) lsSet('almuerzos-name', state.me.display_name);   // para el saludo de la animación de inicio
   state.sessions = se.data;
   state.league = lg.data;
 
@@ -1164,7 +1163,6 @@ function renderProfile() {
     const ok = await confirmSheet({ title: '¿Salir de la app?', text: 'Tendrás que volver a escribir tu usuario y contraseña.', okLabel: 'Salir' });
     if (!ok) return;
     await disablePush().catch(() => {});
-    try { localStorage.removeItem('almuerzos-name'); } catch { /* sin almacenamiento */ }
     await sb.auth.signOut();
   };
 }

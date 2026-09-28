@@ -703,45 +703,90 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .icon-btn.danger { color: var(--danger); }
 .mine-card .vote-status { margin-top: 10px; padding: 8px 10px; font-size: 13.5px; }
 
-/* ---------- Animación de bienvenida (≈1,9 s al abrir la app) ---------- */
+/* ---------- Bienvenida: esmorzaret valencià (3 s al abrir la app) ----------
+   0,0–0,5 pared de azulejos, mesa y naranjas · 0,25–1,4 llega la comida · 1,25 se enciende el cremaet
+   1,1–1,8 título y cinta · 1,75–2,2 mascletà · 1,9 «¡Bon profit!» · 2,55–3,0 se desvanece */
 #intro {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden;
-  background: radial-gradient(120% 80% at 50% 40%, color-mix(in srgb, var(--accent) 14%, var(--bg)) 0%, var(--bg) 62%);
+  background:
+    radial-gradient(90% 60% at 50% 38%, color-mix(in srgb, #f2b705 16%, var(--bg)) 0%, var(--bg) 70%);
   color: var(--text); cursor: pointer; -webkit-user-select: none; user-select: none;
-  animation: in-out .38s cubic-bezier(.4, 0, .6, 1) 1.52s forwards;
+  animation: in-out .45s cubic-bezier(.4, 0, .6, 1) 2.55s forwards;
 }
-#intro.skip { animation: in-out .2s ease-in forwards; }
-#intro .in-wrap { display: grid; justify-items: center; transform: translateY(-3vh); }
-#intro .in-stage { position: relative; width: 120px; height: 120px; margin-bottom: 22px; }
-#intro .in-logo { position: relative; z-index: 2; display: block; width: 120px; height: 120px;
-  filter: drop-shadow(0 14px 26px rgb(217 72 15 / .35));
-  animation: in-pop .62s cubic-bezier(.34, 1.56, .64, 1) both; }
-#intro .in-bocata { transform-box: view-box; transform-origin: 256px 256px; animation: in-bocata .5s .16s cubic-bezier(.34, 1.56, .64, 1) both; }
-#intro .in-tick-bg { transform-box: view-box; transform-origin: 392px 392px; animation: in-scale .34s .5s cubic-bezier(.34, 1.56, .64, 1) both; }
-#intro .in-tick { stroke-dasharray: 130; stroke-dashoffset: 130; animation: in-draw .28s .72s ease-out forwards; }
-#intro .in-glow { position: absolute; inset: -40px; border-radius: 50%; z-index: 0;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 45%, transparent) 0%, transparent 68%);
-  animation: in-glow 1.1s .05s ease-out both; }
-#intro .in-food { position: absolute; left: 50%; top: 50%; z-index: 1; font-size: 30px; line-height: 1; margin: -15px 0 0 -15px; opacity: 0;
-  animation: in-burst .9s cubic-bezier(.2, .8, .3, 1) calc(.42s + var(--d)) both; }
-#intro .in-title { margin: 0; text-align: center; font: 800 38px/1 var(--display); letter-spacing: -.02em; }
-#intro .in-title .w1 { display: block; animation: in-up .45s .34s cubic-bezier(.2, .8, .2, 1) both; }
-#intro .in-title .w2 { display: block; margin-top: 8px; font-size: 19px; letter-spacing: .24em; color: var(--accent); }
-#intro .in-title .w2 span { display: inline-block; animation: in-letter .32s cubic-bezier(.34, 1.56, .64, 1) both; animation-delay: calc(.52s + var(--i) * 34ms); }
-#intro .in-title .w2 .sp { width: .35em; }
-#intro .in-hi { margin: 18px 0 0; font: 600 18px/1.2 var(--body); color: var(--muted); animation: in-up .4s .95s ease-out both; }
-@keyframes in-pop    { from { opacity: 0; transform: scale(.3) rotate(-14deg); } }
-@keyframes in-bocata { from { opacity: 0; transform: translateX(-140px) rotate(-40deg); } }
-@keyframes in-scale  { from { opacity: 0; transform: scale(0); } }
-@keyframes in-draw   { to { stroke-dashoffset: 0; } }
-@keyframes in-glow   { 0% { opacity: 0; transform: scale(.2); } 45% { opacity: 1; } 100% { opacity: .55; transform: scale(1.15); } }
-@keyframes in-burst  { 0% { opacity: 0; transform: translate(0, 0) scale(.3) rotate(0); }
-                       35% { opacity: 1; }
-                       100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1.1) rotate(var(--r)); } }
-@keyframes in-up     { from { opacity: 0; transform: translateY(14px); } }
-@keyframes in-letter { from { opacity: 0; transform: translateY(10px) scale(.4); } }
-@keyframes in-out    { to { opacity: 0; transform: scale(1.06); visibility: hidden; } }
+#intro.skip { animation: in-out .25s ease-in forwards; }
+#intro .in-wrap { display: grid; justify-items: center; width: min(94vw, 390px, 56vh); transform: translateY(-2vh); }
+#intro .in-scene { display: block; width: 100%; height: auto; overflow: visible; animation: in-shake .32s linear 1.78s both; }
+#intro :is(.sc-wall, .sc-table, .sc-orange, .sc-item, .sc-flame, .sc-boom-in) { transform-box: fill-box; }
+#intro .sc-wall { transform-origin: 50% 50%; animation: in-wall .6s cubic-bezier(.2, .8, .2, 1) both; }
+#intro .sc-table { transform-origin: 50% 100%; animation: in-rise .5s .05s cubic-bezier(.2, .8, .2, 1) both; }
+#intro .sc-orange-l { transform-origin: 50% 50%; animation: in-roll-l .6s .15s cubic-bezier(.34, 1.4, .64, 1) both; }
+#intro .sc-orange-r { transform-origin: 50% 50%; animation: in-roll-r .6s .22s cubic-bezier(.34, 1.4, .64, 1) both; }
+#intro .sc-item { transform-origin: 50% 100%; animation: in-drop .55s cubic-bezier(.34, 1.56, .64, 1) both; }
+#intro .sc-bocata  { animation: in-slide .6s .25s cubic-bezier(.34, 1.3, .64, 1) both; }
+#intro .sc-beer    { animation-delay: .45s; }
+#intro .sc-bowl    { animation-delay: .58s; }
+#intro .sc-cremaet { animation-delay: .7s; }
+#intro .sc-cazalla { animation-delay: .82s; }
+#intro .sc-bravas  { animation-delay: .94s; }
+#intro .sc-flame { transform-origin: 50% 100%; animation: in-ignite .3s 1.2s cubic-bezier(.34, 1.56, .64, 1) both, in-flicker .16s 1.5s ease-in-out infinite alternate; }
+#intro .sc-bubbles circle { animation: in-bubble 1s calc(.9s + var(--b)) ease-in infinite; }
+#intro .sc-boom-in { transform-origin: 50% 50%; animation: in-boom .62s ease-out both; filter: drop-shadow(0 0 4px rgb(255 214 60 / .9)); }
+#intro .sc-boom1 .sc-boom-in { animation-delay: 1.75s; }
+#intro .sc-boom2 .sc-boom-in { animation-delay: 1.88s; }
+#intro .sc-boom3 .sc-boom-in { animation-delay: 2.0s; }
+#intro .sc-boom4 .sc-boom-in { animation-delay: 1.82s; }
+#intro .sc-boom5 .sc-boom-in { animation-delay: 1.95s; }
+
+#intro .in-title { margin: 4px 0 0; display: grid; justify-items: center; }
+#intro .t1 {
+  font: 800 min(46px, 12vw)/1 var(--display); letter-spacing: .01em; color: #fff8e7; white-space: nowrap;
+  -webkit-text-stroke: 2.5px #3a2416; paint-order: stroke fill;
+  text-shadow: 0 4px 0 #d9480f, 0 6px 0 #3a2416;
+}
+#intro .t1 span { display: inline-block; animation: in-letter .42s cubic-bezier(.34, 1.56, .64, 1) both; animation-delay: calc(1.08s + var(--i) * 45ms); }
+#intro .ribbon {
+  position: relative; margin-top: 12px; padding: 8px 22px 7px;
+  background: #c8102e; border: 2.5px solid #3a2416; border-radius: 3px; box-shadow: 0 3px 0 #3a2416;
+  transform-origin: 50% 50%; animation: in-unfurl .4s 1.5s cubic-bezier(.34, 1.4, .64, 1) both;
+}
+/* Colas de la cinta con las barras de la senyera */
+#intro .ribbon::before, #intro .ribbon::after {
+  content: ""; position: absolute; top: 7px; width: 22px; height: 100%; z-index: -1;
+  background: repeating-linear-gradient(90deg, #f2b705 0 4px, #c8102e 4px 8px);
+  border: 2.5px solid #3a2416;
+}
+#intro .ribbon::before { left: -18px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 35% 50%); }
+#intro .ribbon::after { right: -18px; clip-path: polygon(0 0, 100% 0, 65% 50%, 100% 100%, 0 100%); }
+#intro .rb-text { display: block; font: 800 17px/1 var(--display); letter-spacing: .3em; margin-right: -.3em; color: #ffe066; animation: in-fade .3s 1.7s both; }
+#intro .in-tag {
+  margin: 14px 0 0; font: italic 800 22px/1 var(--display); color: var(--accent);
+  transform: rotate(-4deg); animation: in-tag .45s 1.9s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+
+@keyframes in-wall   { from { opacity: 0; transform: scale(1.08); } }
+@keyframes in-rise   { from { opacity: 0; transform: translateY(40px) scaleY(.6); } }
+@keyframes in-roll-l { from { opacity: 0; transform: translateX(-120px) rotate(-240deg); } }
+@keyframes in-roll-r { from { opacity: 0; transform: translateX(120px) rotate(240deg); } }
+@keyframes in-drop   { 0% { opacity: 0; transform: translateY(-150px) scale(.85); }
+                       55% { opacity: 1; transform: translateY(0) scale(1.06, .9); }
+                       75% { transform: translateY(-6px) scale(.97, 1.04); }
+                       100% { opacity: 1; transform: none; } }
+@keyframes in-slide  { 0% { opacity: 0; transform: translateX(-340px) rotate(-8deg); }
+                       70% { opacity: 1; transform: translateX(8px) rotate(1deg); }
+                       100% { opacity: 1; transform: none; } }
+@keyframes in-ignite { from { opacity: 0; transform: scale(.1, 0); } }
+@keyframes in-flicker { from { transform: scale(1, 1) skewX(0); } to { transform: scale(.94, 1.08) skewX(-4deg); } }
+@keyframes in-bubble { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: .9; } 100% { opacity: 0; transform: translateY(-70px); } }
+@keyframes in-boom   { 0% { opacity: 0; transform: scale(.1) rotate(-30deg); } 25% { opacity: 1; transform: scale(1.3) rotate(0); } 70% { opacity: 1; transform: scale(1.8) rotate(8deg); } 100% { opacity: 0; transform: scale(2.1) rotate(12deg); } }
+@keyframes in-shake  { 0%, 100% { transform: none; } 20% { transform: translate(-4px, 2px) rotate(-.6deg); }
+                       40% { transform: translate(4px, -2px) rotate(.6deg); } 60% { transform: translate(-3px, -1px); }
+                       80% { transform: translate(2px, 1px); } }
+@keyframes in-letter { from { opacity: 0; transform: translateY(-40px) rotate(-12deg) scale(.6); } }
+@keyframes in-unfurl { from { opacity: 0; transform: scaleX(0); } }
+@keyframes in-fade   { from { opacity: 0; } }
+@keyframes in-tag    { from { opacity: 0; transform: rotate(-4deg) scale(.3); } }
+@keyframes in-out    { to { opacity: 0; transform: scale(1.05); visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) {
-  #intro, #intro * { animation-duration: .01s !important; animation-delay: 0s !important; }
-  #intro { animation: in-out .3s ease 1.2s forwards !important; }
+  #intro *, #intro *::before, #intro *::after { animation-duration: .01s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
+  #intro { animation: in-out .4s ease 2.6s forwards !important; }
 }
