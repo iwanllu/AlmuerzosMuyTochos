@@ -5,7 +5,7 @@ App de votaciones para el grupo → **https://iwanllu.github.io/AlmuerzosMuyToch
 Web estática (HTML + JS, sin build) sobre Supabase (proyecto `almuerzos`, Central EU · Frankfurt).
 
 ## Cómo funciona
-Un almuerzo al mes = una **sesión**. Cada sesión pasa por 4 fases (avanzan solas cuando ha participado todo el grupo; el admin puede forzarlas):
+Un **almuerzo** al mes. Solo el admin crea cada almuerzo (fecha y nota), y cada uno pasa por 4 fases (avanzan solas cuando ha participado todo el grupo; el admin puede forzarlas):
 
 1. **Propuestas** — cada uno propone un sitio (uno por persona). El pool es anónimo.
 2. **Votación** — un voto secreto y definitivo por persona (no a la propia propuesta). La lista se reordena en directo sin mostrar votos; solo se ve cuántos faltan. Empate → sorteo.
@@ -34,7 +34,7 @@ Las reglas de puntos están en la tabla `league` y las categorías en `rating_ca
 |---|---|
 | Añadir un amigo | Authentication → Users → Add user → Create new user → `nombre@almuerzosmuytochos.app`, contraseña, **Auto Confirm User** marcado |
 | Resetear contraseña | `supabase/reset-password.sql` (cambia usuario y clave) |
-| Empezar de cero (borrar sesiones, votos, notas, pools y batallas) | `supabase/reset-datos.sql` (mantiene cuentas, nombres y fotos) |
+| Empezar de cero (borrar almuerzos, votos, notas, pools y batallas) | `supabase/reset-datos.sql` (mantiene cuentas, nombres y fotos) |
 | Hacer admin a alguien | `supabase/make-admin.sql` |
 | Cambiar categorías de puntuación | Table Editor → `rating_categories` (label, emoji, peso, activa) |
 | Cambiar reglas de puntos | Table Editor → `league` |
@@ -66,8 +66,9 @@ Solo se guarda el identificador del sitio; fotos, descripción y web se piden a 
 - `games.js` — minijuegos y ruleta · `maps.js` — buscador de Google Maps, fotos y webs · `sw.js` — recibe las notificaciones
 - `config.js` — URL del proyecto y publishable key
 - `supabase/01-base.sql` — perfiles, admin, fotos (idempotente)
-- `supabase/03-sesiones.sql` — sesiones, propuestas, votos, puntuaciones, liga y funciones seguras (idempotente)
+- `supabase/03-sesiones.sql` — almuerzos, propuestas, votos, puntuaciones, liga y funciones seguras (idempotente)
 - `supabase/04-batallas.sql` — pool privado y batallas
 - `supabase/05-google-maps.sql` — clave de Google Maps (la pone el admin)
+- `supabase/06-almuerzos-textos.sql` — textos de avisos y errores con «almuerzo» en vez de «sesión» (ya aplicado)
 - `supabase/functions/push/index.ts` — función que envía las notificaciones (Web Push sin dependencias; claves derivadas en el servidor, sin service_role)
 - `supabase/opcional-borrar-votaciones-antiguas.sql` — limpia las tablas de la primera versión

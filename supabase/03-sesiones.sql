@@ -174,7 +174,7 @@ declare
   w record;
 begin
   select * into s from public.sessions where id = p_session for update;
-  if not found then raise exception 'La sesión no existe'; end if;
+  if not found then raise exception 'Ese almuerzo no existe'; end if;
 
   if s.phase = 'proposals' then
     if (select count(*) from public.proposals where session_id = p_session) < 2 then
@@ -182,7 +182,7 @@ begin
     end if;
     update public.sessions set phase = 'voting', phase_changed_at = now(), version = version + 1
     where id = p_session;
-    perform public._notify_all('🗳️ ¡A votar!', format('Sesión %s: ya están las propuestas. Elige dónde almorzamos.', s.number),
+    perform public._notify_all('🗳️ ¡A votar!', format('Almuerzo %s: ya están las propuestas. Elige dónde almorzamos.', s.number),
                                format('#/s/%s', p_session), 'session');
     return 'voting';
 
@@ -205,7 +205,7 @@ begin
       phase = 'rating', winner_proposal_id = w.id, winner_name = w.name,
       winner_by_draw = coalesce(w.tied, 0) > 1, phase_changed_at = now(), version = version + 1
     where id = p_session;
-    perform public._notify_all(format('🏆 Ganador: %s', w.name), format('Sesión %s: ya sabemos dónde se almuerza.', s.number),
+    perform public._notify_all(format('🏆 Ganador: %s', w.name), format('Almuerzo %s: ya sabemos dónde se almuerza.', s.number),
                                format('#/s/%s', p_session), 'session');
     return 'rating';
 
@@ -234,7 +234,7 @@ begin
     return 'closed';
   end if;
 
-  raise exception 'La sesión ya está cerrada';
+  raise exception 'Ese almuerzo ya está cerrado';
 end $$;
 
 -- Recalcula contadores y avanza sola cuando ha participado todo el grupo
@@ -321,17 +321,17 @@ create or replace function public.create_session(p_date date, p_time time defaul
 returns bigint language plpgsql security definer set search_path = '' as $$
 declare new_id bigint;
 begin
-  if not public.is_admin() then raise exception 'Solo el admin puede crear sesiones'; end if;
+  if not public.is_admin() then raise exception 'Solo el admin puede crear almuerzos'; end if;
   if p_date is null then raise exception 'Pon la fecha del almuerzo'; end if;
   if exists (select 1 from public.sessions where phase <> 'closed') then
-    raise exception 'Ya hay una sesión en marcha. Termínala antes de crear otra';
+    raise exception 'Ya hay un almuerzo en marcha. Termínalo antes de crear otro';
   end if;
   insert into public.sessions (number, lunch_date, lunch_time, note)
   values ((select coalesce(max(number), 0) + 1 from public.sessions), p_date, p_time,
           nullif(btrim(coalesce(p_note, '')), ''))
   returning id into new_id;
-  perform public._notify_all(format('🍽️ Sesión %s', (select number from public.sessions where id = new_id)),
-                             format('Almuerzo el %s. ¡Propón tu sitio desde tu pool!', to_char(p_date, 'DD/MM')),
+  perform public._notify_all(format('🍽️ Almuerzo %s', (select number from public.sessions where id = new_id)),
+                             format('Será el %s. ¡Propón tu sitio desde tu pool!', to_char(p_date, 'DD/MM')),
                              format('#/s/%s', new_id), 'session');
   return new_id;
 end $$;
@@ -354,13 +354,13 @@ declare
   ph text;
   nm text := regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g');
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   if char_length(nm) < 2 then raise exception 'Escribe el nombre del sitio'; end if;
   if char_length(nm) > 80 then raise exception 'El nombre es demasiado largo'; end if;
   if char_length(coalesce(p_note, '')) > 200 then raise exception 'El comentario es demasiado largo'; end if;
 
   select phase into ph from public.sessions where id = p_session for update;
-  if ph is null then raise exception 'La sesión no existe'; end if;
+  if ph is null then raise exception 'Ese almuerzo no existe'; end if;
   if ph <> 'proposals' then raise exception 'El plazo de propuestas ya está cerrado'; end if;
 
   begin
@@ -379,7 +379,7 @@ create or replace function public.withdraw_proposal(p_session bigint)
 returns void language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ph text;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select phase into ph from public.sessions where id = p_session for update;
   if ph is distinct from 'proposals' then raise exception 'Ya no se pueden retirar propuestas'; end if;
   delete from public.proposals where session_id = p_session and user_id = uid;
@@ -391,19 +391,19 @@ create or replace function public.cast_vote(p_session bigint, p_proposal bigint)
 returns void language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ph text; v_owner uuid;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select phase into ph from public.sessions where id = p_session for update;
-  if ph is null then raise exception 'La sesión no existe'; end if;
+  if ph is null then raise exception 'Ese almuerzo no existe'; end if;
   if ph <> 'voting' then raise exception 'La votación no está abierta'; end if;
 
   select user_id into v_owner from public.proposals where id = p_proposal and session_id = p_session;
-  if not found then raise exception 'Esa propuesta no es de esta sesión'; end if;
+  if not found then raise exception 'Esa propuesta no es de este almuerzo'; end if;
   if v_owner = uid then raise exception 'No puedes votar tu propia propuesta'; end if;
 
   insert into public.session_votes (session_id, user_id, proposal_id)
   values (p_session, uid, p_proposal)
   on conflict do nothing;
-  if not found then raise exception 'Ya has votado en esta sesión'; end if;
+  if not found then raise exception 'Ya has votado en este almuerzo'; end if;
 
   perform public._auto_advance(p_session);
 end $$;
@@ -413,10 +413,10 @@ create or replace function public.rate_session(p_session bigint, p_scores jsonb)
 returns void language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ph text; c record; v int;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select phase into ph from public.sessions where id = p_session for update;
-  if ph is null then raise exception 'La sesión no existe'; end if;
-  if ph <> 'rating' then raise exception 'Ahora no se puede puntuar esta sesión'; end if;
+  if ph is null then raise exception 'Ese almuerzo no existe'; end if;
+  if ph <> 'rating' then raise exception 'Ahora no se puede puntuar este almuerzo'; end if;
 
   for c in select id, key, label from public.rating_categories where active order by position loop
     begin
@@ -441,7 +441,7 @@ declare
   s public.sessions;
   lg public.league;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select * into s from public.sessions where id = p_session;
   if not found then return null; end if;
   select * into lg from public.league where id = 1;
@@ -491,7 +491,7 @@ create or replace function public.get_league()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare lg public.league;
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select * into lg from public.league where id = 1;
   return jsonb_build_object(
     'final_revealed', lg.final_revealed,

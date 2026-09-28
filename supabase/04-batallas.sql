@@ -223,7 +223,7 @@ declare
   n int;
   u uuid;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   if char_length(nm) < 2 then raise exception 'Escribe el nombre del sitio'; end if;
   if char_length(nm) > 80 then raise exception 'El nombre es demasiado largo'; end if;
   if char_length(coalesce(nt, '')) > 200 then raise exception 'El comentario es demasiado largo'; end if;
@@ -294,7 +294,7 @@ create or replace function public.propose_place(p_session bigint, p_place bigint
 returns void language plpgsql security definer set search_path = '' as $$
 declare pl public.pool_places;
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select * into pl from public.pool_places where id = p_place and user_id = auth.uid();
   if not found then raise exception 'Ese sitio no está en tu pool'; end if;
   if pl.battle_id is not null then raise exception 'Ese sitio está en batalla: podrás proponerlo cuando la ganes'; end if;
@@ -306,7 +306,7 @@ create or replace function public.spin_roulette(p_battle bigint)
 returns text language plpgsql security definer set search_path = '' as $$
 declare b public.battles; g text; u uuid;
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select * into b from public.battles where id = p_battle for update;
   if not found then raise exception 'La batalla no existe'; end if;
   if b.status <> 'spin' then raise exception 'La ruleta ya se ha girado'; end if;
@@ -328,7 +328,7 @@ create or replace function public.start_attempt(p_battle bigint)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); b public.battles; bp public.battle_players; n int;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select * into b from public.battles where id = p_battle for update;
   if not found or b.status <> 'playing' then raise exception 'Esta batalla no está en juego'; end if;
   select * into bp from public.battle_players where battle_id = p_battle and user_id = uid for update;
@@ -357,7 +357,7 @@ declare
   uid uuid := auth.uid(); b public.battles; bp public.battle_players;
   maxs int; sc int; resolved boolean;
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   select * into b from public.battles where id = p_battle for update;
   if not found then raise exception 'La batalla no existe'; end if;
   if b.status <> 'playing' then return jsonb_build_object('ok', false, 'reason', 'La batalla ya se ha resuelto'); end if;
@@ -440,7 +440,7 @@ create or replace function public.my_battles()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare uid uuid := auth.uid();
 begin
-  if uid is null then raise exception 'No has iniciado sesión'; end if;
+  if uid is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   return jsonb_build_object(
     'stats', (select jsonb_build_object('open_battles', open_battles, 'fighters', fighters, 'resolved_total', resolved_total)
               from public.battle_stats where id = 1),

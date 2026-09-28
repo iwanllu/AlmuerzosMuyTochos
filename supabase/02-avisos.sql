@@ -86,7 +86,7 @@ end $$;
 create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   if p_endpoint is null or p_endpoint not like 'https://%' or coalesce(p_p256dh, '') = '' or coalesce(p_auth, '') = '' then
     raise exception 'Suscripción no válida';
   end if;
@@ -112,7 +112,7 @@ create or replace function public.push_claim()
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare res jsonb;
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   with c as (
     update public.push_outbox o set claimed_at = now()
     where o.id in (
@@ -139,7 +139,7 @@ end $$;
 create or replace function public.push_done(p_ids bigint[], p_gone text[] default '{}')
 returns void language plpgsql security definer set search_path = '' as $$
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   update public.push_outbox set sent_at = now()
   where id = any(p_ids) and actor_id = auth.uid();
   -- Borra móviles que ya no aceptan avisos (solo destinatarios de avisos recién enviados por este usuario)
@@ -155,7 +155,7 @@ end $$;
 create or replace function public.push_test()
 returns void language plpgsql security definer set search_path = '' as $$
 begin
-  if auth.uid() is null then raise exception 'No has iniciado sesión'; end if;
+  if auth.uid() is null then raise exception 'Tienes que entrar con tu usuario'; end if;
   if not exists (select 1 from public.push_subscriptions where user_id = auth.uid()) then
     raise exception 'Este usuario no tiene avisos activados en ningún dispositivo';
   end if;

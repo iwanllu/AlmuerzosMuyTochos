@@ -4,7 +4,7 @@ import { pickPlace, placeInfo, placeLinks, mapsSearchURL, onMapsAuthError, carou
 
 // ===========================================================================
 // Almuerzos Muy Tochos
-// Sesiones mensuales: propuestas anónimas → votación secreta → puntuación → revelación
+// Almuerzos mensuales: propuestas anónimas → votación secreta → puntuación → revelación
 // ===========================================================================
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -104,7 +104,7 @@ function friendlyError(err) {
   if (/Invalid login credentials/i.test(m)) return 'Usuario o contraseña incorrectos';
   if (/Email not confirmed/i.test(m)) return 'Este usuario aún no está confirmado';
   if (/Failed to fetch|NetworkError|network/i.test(m)) return 'Sin conexión. Inténtalo de nuevo';
-  if (/JWT|expired/i.test(m)) return 'La sesión ha caducado, vuelve a entrar';
+  if (/JWT|expired/i.test(m)) return 'Tu acceso ha caducado, vuelve a entrar';
   return m;
 }
 
@@ -446,7 +446,7 @@ function renderNoProfile() {
   document.getElementById('logout').onclick = () => sb.auth.signOut();
 }
 
-// ---------- Piezas comunes de sesión ----------
+// ---------- Piezas comunes de un almuerzo ----------
 function stepper(phase) {
   const cur = phaseIndex(phase);
   return `<div class="stepper" aria-label="Fase: ${esc(PHASES[cur]?.label)}">
@@ -494,7 +494,7 @@ function myStatus(b) {
   if (s.phase === 'rating') return b.my_ratings
     ? { done: true, ico: '✅', text: `Has puntuado ${esc(s.winner_name)}` }
     : { done: false, ico: '⭐', text: `Puntúa ${esc(s.winner_name)}` };
-  return { done: true, ico: '🎉', text: 'Sesión terminada' };
+  return { done: true, ico: '🎉', text: 'Almuerzo terminado' };
 }
 
 // ---------- Inicio: el próximo almuerzo ----------
@@ -511,7 +511,7 @@ function nextHead(s) {
   const future = daysUntil(s.lunch_date) >= 0;
   return `
     <div class="session-head next-head">
-      <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · sesión ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos.')}</div>
+      <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos.')}</div>
       <h2>${esc(longDate(s.lunch_date))}${s.lunch_time ? ` <span class="when">· ${esc(hhmm(s.lunch_time))}</span>` : ''}</h2>
       <div class="rel-day">${relDay(s.lunch_date)}</div>
       ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
@@ -533,7 +533,7 @@ function history(past) {
         </a>`).join('')}
     </div>` : '<div class="card empty" style="padding:20px">Aún no hay almuerzos anteriores.</div>'}`;
 }
-// Secciones de la sesión en curso, en este orden: ranking → tu propuesta → participación
+// Secciones del almuerzo en curso, en este orden: ranking → tu propuesta → participación
 function activeSections(b) {
   const phase = b.session.phase;
   if (phase === 'proposals') return proposalsView(b);
@@ -558,7 +558,7 @@ function renderHome() {
     <div class="card empty">
       <div class="big">🗓️</div>
       <strong>No hay ningún almuerzo en marcha ${info('sin-sesion', isAdmin() ? 'Créalo cuando tengáis fecha: se abrirá el plazo de propuestas para todo el grupo.' : 'Cuando el admin ponga fecha al próximo, aparecerá aquí.')}</strong>
-      ${isAdmin() ? `<button class="btn primary" data-go="#/nueva">${ICON.plus} Crear sesión ${nextNum}</button>` : ''}
+      ${isAdmin() ? `<button class="btn primary" data-go="#/nueva">${ICON.plus} Crear almuerzo ${nextNum}</button>` : ''}
     </div>`;
 
   $app.innerHTML = `
@@ -576,24 +576,24 @@ function renderHome() {
   if (b) bindSession(b);
 }
 
-// ---------- Sesión (las anteriores; la que está en marcha se ve en Inicio) ----------
+// ---------- Almuerzo (los anteriores; el que está en marcha se ve en Inicio) ----------
 function renderSession(id) {
   if (activeSession()?.id === id) return renderHome();
   const s = state.sessions.find((x) => x.id === id);
   if (!s) {
-    $app.innerHTML = `${topbar('Sesión', true)}<main><div class="empty"><div class="big">🫥</div>Esta sesión no existe.</div></main>${tabbar('home')}`;
+    $app.innerHTML = `${topbar('Almuerzo', true)}<main><div class="empty"><div class="big">🫥</div>Este almuerzo no existe.</div></main>${tabbar('home')}`;
     bindCommon();
     return;
   }
   const b = state.boards.get(id);
   if (!b) {
-    $app.innerHTML = `${topbar(`Sesión ${s.number}`, true)}<main><div class="splash"><div class="spinner"></div></div></main>${tabbar('home')}`;
+    $app.innerHTML = `${topbar(`Almuerzo ${s.number}`, true)}<main><div class="splash"><div class="spinner"></div></div></main>${tabbar('home')}`;
     bindCommon();
     ensureBoard(id);
     return;
   }
   $app.innerHTML = `
-    ${topbar(`Sesión ${b.session.number}`, true)}
+    ${topbar(`Almuerzo ${b.session.number}`, true)}
     <main>
       <div class="session-head">
         <div class="eyebrow">🎉 Almuerzo terminado</div>
@@ -906,11 +906,11 @@ function bindSession(b) {
     };
     document.getElementById('adm-edit').onclick = () => editSessionSheet(b.session);
     document.getElementById('adm-del').onclick = async () => {
-      const ok = await confirmSheet({ title: `¿Borrar la sesión ${b.session.number}?`, text: 'Se borrarán sus propuestas, votos y puntuaciones. No se puede deshacer.', okLabel: 'Borrar', danger: true });
+      const ok = await confirmSheet({ title: `¿Borrar el almuerzo ${b.session.number}?`, text: 'Se borrarán sus propuestas, votos y puntuaciones. No se puede deshacer.', okLabel: 'Borrar', danger: true });
       if (!ok) return;
       const { error } = await sb.from('sessions').delete().eq('id', id);
       if (error) return toast(friendlyError(error), true);
-      toast('Sesión borrada');
+      toast('Almuerzo borrado');
       state.boards.delete(id);
       await loadAll().catch(() => {});
       go('#/');
@@ -930,7 +930,7 @@ function sessionFields(v) {
 
 function editSessionSheet(s) {
   sheet(`
-    <h3>Editar sesión ${s.number}</h3>
+    <h3>Editar almuerzo ${s.number}</h3>
     <form id="edit-form" novalidate>
       ${sessionFields({ date: s.lunch_date, time: hhmm(s.lunch_time), note: s.note || '' })}
       <div class="error-text" id="edit-error"></div>
@@ -947,28 +947,28 @@ function editSessionSheet(s) {
       }).eq('id', s.id);
       if (error) { root.querySelector('#edit-error').textContent = friendlyError(error); return; }
       done(true);
-      toast('Sesión actualizada');
+      toast('Almuerzo actualizado');
       await loadAll().catch(() => {});
       render();
     };
   });
 }
 
-// ---------- Nueva sesión (admin) ----------
+// ---------- Nuevo almuerzo (solo admin) ----------
 function renderNew() {
   const nextNum = (state.sessions[0]?.number || 0) + 1;
   const inAWeek = new Date(Date.now() + 7 * 86400000);
   const v = (state.drafts.newSession ||= { date: isoDate(inAWeek), time: '', note: '' });
   const busy = activeSession();
   $app.innerHTML = `
-    ${topbar(`Nueva sesión ${nextNum}`, true)}
+    ${topbar(`Nuevo almuerzo ${nextNum}`, true)}
     <main>
-      ${busy ? `<div class="card"><strong>Ya hay una sesión en marcha ${info('busy', `Termina la sesión ${busy.number} antes de crear otra.`)}</strong></div>` : `
-      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearla se abre el plazo de propuestas para todo el grupo. La fecha y la nota se pueden editar después.')}</div>
+      ${busy ? `<div class="card"><strong>Ya hay un almuerzo en marcha ${info('busy', `Termina el almuerzo ${busy.number} antes de crear otro.`)}</strong></div>` : `
+      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearlo se abre el plazo de propuestas para todo el grupo. La fecha y la nota se pueden editar después.')}</div>
       <form class="card" id="new-form" novalidate>
         ${sessionFields(v)}
         <div class="error-text" id="new-error" role="alert"></div>
-        <button class="btn primary block" type="submit">Crear sesión ${nextNum}</button>
+        <button class="btn primary block" type="submit">Crear almuerzo ${nextNum}</button>
       </form>`}
     </main>
     ${tabbar('home')}`;
@@ -984,7 +984,7 @@ function renderNew() {
     const { data, error } = await sb.rpc('create_session', { p_date: v.date, p_time: v.time || null, p_note: v.note || null });
     if (error) { document.getElementById('new-error').textContent = friendlyError(error); btn.disabled = false; return; }
     state.drafts.newSession = null;
-    toast(`Sesión ${nextNum} creada`);
+    toast(`Almuerzo ${nextNum} creado`);
     await loadAll().catch(() => {});
     go(`#/s/${data}`);
   };
@@ -1017,7 +1017,7 @@ function renderRanking() {
               <span style="font-size:24px">${['🥇', '🥈', '🥉'][i] || `${i + 1}.`}</span>
               <span class="grow">
                 <strong>${esc(st.name)}</strong>
-                <span class="hint">Sesión ${st.number} · ${esc(shortDate(st.lunch_date))} · de ${esc(st.host_id ? nameOf(st.host_id) : '—')}</span>
+                <span class="hint">Almuerzo ${st.number} · ${esc(shortDate(st.lunch_date))} · de ${esc(st.host_id ? nameOf(st.host_id) : '—')}</span>
               </span>
               <span class="score">${num(st.score, 2)}</span>
             </div>
@@ -1041,7 +1041,7 @@ function renderRanking() {
       </div>`;
   } else {
     content = `
-      <div class="section-title"><span class="grow">Puntos de victoria ${info('puntos', `${rules} Las notas son secretas hasta la gran final.`)}</span><span class="chip">${lg.closed_count} ${lg.closed_count === 1 ? 'sesión cerrada' : 'sesiones cerradas'}</span></div>
+      <div class="section-title"><span class="grow">Puntos de victoria ${info('puntos', `${rules} Las notas son secretas hasta la gran final.`)}</span><span class="chip">${lg.closed_count} ${lg.closed_count === 1 ? 'almuerzo cerrado' : 'almuerzos cerrados'}</span></div>
       <div class="card standings">
         ${lg.standings.map((r, i) => `
           <div class="stand-row ${r.user_id === me ? 'me' : ''}">
@@ -1049,7 +1049,7 @@ function renderRanking() {
             ${avatar(person(r.user_id), 'sm')}
             <span class="grow">
               <span class="name">${esc(nameOf(r.user_id))}</span>
-              <span class="breakdown">${r.wins ? '🏆'.repeat(Math.min(r.wins, 6)) + ` ${r.wins} ${r.wins === 1 ? 'sesión ganada' : 'sesiones ganadas'}` : 'Sin victorias aún'}</span>
+              <span class="breakdown">${r.wins ? '🏆'.repeat(Math.min(r.wins, 6)) + ` ${r.wins} ${r.wins === 1 ? 'almuerzo ganado' : 'almuerzos ganados'}` : 'Sin victorias aún'}</span>
             </span>
             <span class="pts">${r.points}<small> pts</small></span>
           </div>`).join('')}
@@ -1063,7 +1063,7 @@ function renderRanking() {
       ${content}
       ${isAdmin() ? `
         <div class="admin-box">
-          <div class="section-title">Admin ${info('admin-final', lg.final_revealed ? 'Vuelve a esconder las notas y la clasificación final.' : `Muestra a todo el grupo las notas de los sitios y quién gana la cena. Se puede volver a ocultar.${lg.closed_count ? '' : ' Hace falta al menos una sesión cerrada.'}`)}</div>
+          <div class="section-title">Admin ${info('admin-final', lg.final_revealed ? 'Vuelve a esconder las notas y la clasificación final.' : `Muestra a todo el grupo las notas de los sitios y quién gana la cena. Se puede volver a ocultar.${lg.closed_count ? '' : ' Hace falta al menos un almuerzo cerrado.'}`)}</div>
           ${lg.final_revealed
             ? '<button class="btn ghost block" id="adm-final">Ocultar la gran final</button>'
             : `<button class="btn primary block" id="adm-final" ${lg.closed_count ? '' : 'disabled'}>🎉 Revelar la gran final</button>`}
@@ -1116,7 +1116,7 @@ function renderProfile() {
       <div class="card who-list">
         ${members.map((m) => `<div class="who-row">${avatar(m, 'sm')}<span class="name">${esc(m.display_name)}</span><span class="hint">@${esc(m.username)}</span></div>`).join('')}
       </div>
-      <div style="margin-top:24px"><button class="btn ghost block" id="logout">Cerrar sesión</button></div>
+      <div style="margin-top:24px"><button class="btn ghost block" id="logout">Salir</button></div>
     </main>
     ${tabbar('profile')}`;
   bindCommon();
@@ -1160,7 +1160,7 @@ function renderProfile() {
   };
 
   document.getElementById('logout').onclick = async () => {
-    const ok = await confirmSheet({ title: '¿Cerrar sesión?', text: 'Tendrás que volver a escribir tu usuario y contraseña.', okLabel: 'Cerrar sesión' });
+    const ok = await confirmSheet({ title: '¿Salir de la app?', text: 'Tendrás que volver a escribir tu usuario y contraseña.', okLabel: 'Salir' });
     if (!ok) return;
     await disablePush().catch(() => {});
     await sb.auth.signOut();
