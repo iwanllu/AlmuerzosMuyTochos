@@ -1,4 +1,4 @@
-/* Estilo provisional: primero la funcionalidad, el diseño se pule al final */
+/* Almuerzos Muy Tochos · estilos */
 :root {
   --bg: #fbf6ef;
   --surface: #ffffff;
@@ -961,4 +961,61 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 @media (max-width: 370px) {
   .mine-ctl .mine-tag { font-size: 10px; }
   .mc-btn { width: 22px; height: 22px; }
+}
+
+/* ---------- Más aire: bloque del sitio del almuerzo + participación ---------- */
+.section-title { margin: 32px 4px 12px; }
+.card + .card { margin-top: 14px; }
+
+/* Cabecera: la fecha a la izquierda y el anillo de participación a la derecha */
+.nh-top { display: flex; align-items: center; gap: 14px; }
+.nh-main { flex: 1; min-width: 0; }
+.next-head .rel-day { margin-top: 8px; }
+.next-head .nh-top { margin-top: 2px; }
+.next-head .stepper { margin-top: 20px; }
+.part-ring {
+  flex: none; display: grid; justify-items: center; gap: 5px; padding: 2px; margin-right: 2px;
+  border: 0; background: none; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.pr-dial { position: relative; width: 62px; height: 62px; transition: transform .15s; }
+.part-ring:active .pr-dial { transform: scale(.95); }
+.pr-dial svg { display: block; width: 100%; height: 100%; }
+.pr-dial circle { fill: none; stroke-width: 6; }
+.pr-dial .trk { stroke: var(--accent-soft); }
+.pr-dial .val { stroke: var(--accent); stroke-linecap: round; }
+.part-ring.ok .trk { stroke: var(--ok-soft); }
+.part-ring.ok .val { stroke: var(--ok); }
+.pr-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.pr-num > span { font: 800 18px/1 var(--display); color: var(--text); letter-spacing: -.01em; }
+.pr-num small { font: 700 11px/1 var(--body); color: var(--muted); margin-left: 1px; }
+.pr-cap { font-size: 11px; font-weight: 600; line-height: 1.15; color: var(--muted); text-align: center; white-space: nowrap; }
+
+/* El bloque agrupa el ranking (o el sitio ganador) y su participación */
+.lunch-block {
+  margin-top: 28px; padding: 16px 6px 12px; border-radius: 24px;
+  background: color-mix(in srgb, var(--surface) 45%, transparent); border: 1px solid var(--line);
+}
+.lunch-block .block-head { margin: 0 10px 14px; }
+.lunch-block .block-head h3 { font-size: 19px; }
+.lunch-block .tiles.ranking { gap: 10px; }
+.lunch-block .tiles.ranking .place-tile > .carousel { flex-basis: 44%; }   /* el bloque resta ancho: la foto cede un poco */
+.lunch-block .place-tile { box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.lunch-block > .card.empty { box-shadow: none; margin: 0; }
+.lunch-block > .winner-card { margin: 0; }
+
+.part-strip { margin: 16px 10px 0; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.ps-head { display: flex; align-items: center; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; }
+.ps-label { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1.2 var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.ps-count { font-size: 13.5px; color: var(--muted); }
+.ps-count b { font: 800 17px/1 var(--display); color: var(--text); }
+.part-strip .bar { height: 6px; border-radius: 3px; }
+.ps-note { margin: 0; font-size: 13px; color: var(--muted); }
+.part-strip.ok .ps-note { color: var(--ok); font-weight: 600; }
+#participacion { scroll-margin-top: 90px; }
+@media (max-width: 370px) {
+  .pr-dial { width: 54px; height: 54px; }
+  .pr-num > span { font-size: 16px; }
+  .next-head h2 { font-size: 23px; }
+  .lunch-block { padding: 14px 5px 10px; }
+  .lunch-block .tiles.ranking .place-tile > .carousel { flex-basis: 40%; }
 }

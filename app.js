@@ -473,20 +473,42 @@ const PHASE_TEXT = {
   voting: { did: 'han votado', didOne: 'ha votado', info: 'Cuando vote el último, se cierra la votación y el primero del ranking será el sitio del almuerzo.', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
   rating: { did: 'han puntuado', didOne: 'ha puntuado', info: 'Cuando puntúe el último, se desvela quién propuso el sitio y se lleva sus puntos.', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
 };
-function counter(b) {
+// Franja de participación: va dentro del bloque del sitio del almuerzo
+function partStrip(b) {
   const p = pending(b);
   const t = PHASE_TEXT[b.session.phase];
   const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
   const all = p.missing === 0;
   return `
-    <div class="section-title">Participación ${info('participacion', all ? t.soon : `${t.info} Es anónimo: nadie sabe quién falta.`)}</div>
-    <div class="card counter" aria-live="polite">
-      <div class="row">
-        <span class="big ${all ? 'ok' : ''}">${all ? '✓' : p.missing}</span>
-        <span class="label">${all ? t.all : `de ${p.total} aún no ${p.missing === 1 ? t.didOne : t.did}`}</span>
+    <div class="part-strip ${all ? 'ok' : ''}" id="participacion" aria-live="polite">
+      <div class="ps-head">
+        <span class="ps-label">Participación ${info('participacion', all ? t.soon : `${t.info} Es anónimo: nadie sabe quién falta.`)}</span>
+        <span class="ps-count"><b>${p.done}</b> de ${p.total} ${p.done === 1 ? t.didOne : t.did}</span>
       </div>
       <div class="bar ${all ? 'ok' : ''}"><i style="width:${pct}%"></i></div>
+      <p class="ps-note">${all ? `✓ ${t.all}` : `Faltan ${p.missing} por ${p.verb}`}</p>
     </div>`;
+}
+// Anillo pequeño de participación para la cabecera (toca para bajar al detalle)
+function partRing(b) {
+  const t = PHASE_TEXT[b.session.phase];
+  if (!t) return '';
+  const p = pending(b);
+  const all = p.missing === 0;
+  const r = 25, c = 2 * Math.PI * r;
+  const len = p.total ? (p.done / p.total) * c : 0;
+  return `
+    <button type="button" class="part-ring ${all ? 'ok' : ''}" data-scroll="#participacion"
+      aria-label="Participación: ${p.done} de ${p.total} ${p.done === 1 ? t.didOne : t.did}. Ver detalle">
+      <span class="pr-dial">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <circle class="trk" cx="32" cy="32" r="${r}"/>
+          ${len > 0 ? `<circle class="val" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 32 32)"/>` : ''}
+        </svg>
+        <span class="pr-num"><span>${p.done}<small>/${p.total}</small></span></span>
+      </span>
+      <span class="pr-cap">${all ? '¡todos!' : t.did}</span>
+    </button>`;
 }
 function myStatus(b) {
   const s = b.session;
@@ -512,12 +534,15 @@ function relDay(d) {
   const n = daysUntil(d);
   return n === 0 ? '¡Es hoy!' : n === 1 ? 'Mañana' : n > 1 ? `Dentro de ${n} días` : n === -1 ? 'Fue ayer' : `Fue hace ${-n} días`;
 }
-function nextHead(s) {
+function nextHead(s, b = null) {
+  const ring = b ? partRing(b) : '';
   if (!s.lunch_date) return `
     <div class="session-head next-head">
       <div class="eyebrow">🍽️ Próximo almuerzo · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos. La fecha se elige a la vez que las propuestas.')}</div>
+      <div class="nh-top"><div class="nh-main">
       <h2>Fecha por decidir</h2>
-      <button class="rel-day pick" type="button" data-scroll="#fecha">📅 Elegid fecha en el calendario ↓</button>
+      <button class="rel-day pick" type="button" data-scroll="#fecha">📅 Elegid fecha ↓</button>
+      </div>${ring}</div>
       ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
       ${stepper(s.phase)}
     </div>`;
@@ -525,8 +550,10 @@ function nextHead(s) {
   return `
     <div class="session-head next-head">
       <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos.')}</div>
+      <div class="nh-top"><div class="nh-main">
       <h2>${esc(longDate(s.lunch_date))}</h2>
       <div class="rel-day">${relDay(s.lunch_date)}</div>
+      </div>${ring}</div>
       ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
       ${stepper(s.phase)}
     </div>`;
@@ -561,7 +588,7 @@ function renderHome() {
   const openB = state.battles?.stats?.open_battles || 0;
 
   let top;
-  if (act && b) top = nextHead(b.session) + activeSections(b);
+  if (act && b) top = nextHead(b.session, b) + activeSections(b);
   else if (act) top = nextHead(act) + '<div class="card"><div class="splash" style="min-height:120px"><div class="spinner"></div></div></div>';
   else top = `
     <div class="session-head next-head">
@@ -846,11 +873,13 @@ function proposalsView(b) {
       </div>
     </form>`;
   return `
-    ${ranking}
+    <section class="lunch-block">
+      ${ranking}
+      ${partStrip(b)}
+    </section>
     ${showForm ? `
     <div class="section-title" id="tu-propuesta">${mp ? 'Cambia tu propuesta' : 'Tu propuesta'} ${info('tu-propuesta', 'Elige un sitio de tu pool. Es anónima: solo tú verás cuál es la tuya en el ranking, y los demás lo sabrán solo si gana. Puedes cambiarla o retirarla mientras dure el plazo.')}</div>
     ${form}` : ''}
-    ${counter(b)}
     ${datePollView(b)}`;
 }
 
@@ -863,6 +892,7 @@ function votingView(b) {
   const mp = b.my_proposal || b.proposals.find((p) => p.mine);
   const ranked = (b.session.votes_count || 0) > 0;
   return `
+    <section class="lunch-block">
     <div class="block-head">
       <h3>🏆 Ranking de sitios para el próximo almuerzo ${info('ranking', 'Se ordena en directo por votos, pero nadie ve cuántos tiene cada sitio. Cada uno tiene un voto, secreto y definitivo. Toca un sitio para ver su web y su carta.')}</h3>
       <div class="sub"><span class="live">en directo</span><span>${ranked ? 'ordenado por votos' : 'aún sin votos'}</span></div>
@@ -887,13 +917,14 @@ function votingView(b) {
           </li>`;
       }).join('')}
     </ul>
+    ${partStrip(b)}
+    </section>
     <div class="section-title">Tu voto ${info('tu-voto', `${mp ? 'Tu sitio compite de forma anónima y no puedes votarlo. ' : ''}Tienes un voto, secreto y definitivo, para otro sitio del ranking.`)}</div>
     <div class="card mine-card">
       <div class="vote-status ${voted ? 'ok' : ''}">${voted
         ? `✅ Has votado <b>«${esc(votedName)}»</b>`
         : '🗳️ <b>Te falta votar:</b> elige en el ranking de arriba'}</div>
     </div>
-    ${counter(b)}
     ${datePollView(b)}`;
 }
 
@@ -905,7 +936,8 @@ function ratingView(b) {
   const vals = cats.map((c) => d[c.key]).filter(Boolean);
   const avg = vals.length ? vals.reduce((a, x) => a + x, 0) / vals.length : null;
   return `
-    <div class="card winner-card" style="margin-top:14px">
+    <section class="lunch-block">
+    <div class="card winner-card">
       ${winnerPhoto(b)}
       <div class="trophy">🏆</div>
       <div class="label">Sitio ganador ${info('ganador', 'El más votado. Quién lo propuso se desvela cuando todo el grupo haya puntuado.')}</div>
@@ -913,6 +945,8 @@ function ratingView(b) {
       ${b.session.winner_by_draw ? '<span class="chip gold">Empate resuelto por sorteo 🎲</span>' : ''}
       <div class="mystery">🤫 ¿Quién lo propuso?</div>
     </div>
+    ${partStrip(b)}
+    </section>
     <div class="section-title"><span class="grow">${b.my_ratings ? 'Tu puntuación' : 'Puntúa el almuerzo'} ${info('puntua', 'Del 1 al 10 en cada categoría. Puedes corregirlo hasta que puntúe todo el grupo. La nota del sitio es secreta hasta la gran final.')}</span></div>
     <form class="card" id="rate-form" novalidate>
       ${cats.map((c) => `
@@ -933,7 +967,6 @@ function ratingView(b) {
         ${b.my_ratings ? 'Actualizar mi puntuación' : complete ? 'Enviar puntuación' : `Te faltan ${cats.length - vals.length} categorías`}
       </button>
     </form>
-    ${counter(b)}
     ${datePollView(b)}`;
 }
 
