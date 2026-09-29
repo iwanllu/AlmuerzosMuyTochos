@@ -87,7 +87,6 @@ const longDate = (d) => { if (!d) return 'Fecha por decidir'; const s = fmtLong.
 const shortDate = (d) => (d ? fmtShort.format(parseDate(d)) : 'sin fecha');
 const fmtDay = new Intl.DateTimeFormat('es', { weekday: 'short', day: 'numeric', month: 'short' });
 const dayLabel = (d) => { const s = fmtDay.format(parseDate(d)).replace(',', '').replace(/\.(?=\s|$)/g, ''); return s[0].toUpperCase() + s.slice(1); };
-const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
 function isoDate(date) {
   const z = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${z(date.getMonth() + 1)}-${z(date.getDate())}`;
@@ -136,7 +135,7 @@ function confirmSheet({ title, text, okLabel = 'Aceptar', danger = false }) {
 // ---------------------------------------------------------------------------
 // Datos
 // ---------------------------------------------------------------------------
-const SESSION_COLS = 'id, number, lunch_date, lunch_time, note, phase, proposals_count, votes_count, ratings_count, winner_name, winner_by_draw, winner_proposal_id, host_id, version, phase_changed_at';
+const SESSION_COLS = 'id, number, lunch_date, note, phase, proposals_count, votes_count, ratings_count, winner_name, winner_by_draw, winner_proposal_id, host_id, version, phase_changed_at';
 const activeSession = () => state.sessions.find((s) => s.phase !== 'closed');
 const isAdmin = () => !!state.me?.is_admin;
 
@@ -460,7 +459,7 @@ function stepper(phase) {
   </div>`;
 }
 function whenText(s) {
-  return `${longDate(s.lunch_date)}${s.lunch_time ? ` · ${hhmm(s.lunch_time)}` : ''}`;
+  return longDate(s.lunch_date);   // solo la fecha: la hora se habla aparte
 }
 function pending(b) {
   const s = b.session;
@@ -517,7 +516,7 @@ function nextHead(s) {
   if (!s.lunch_date) return `
     <div class="session-head next-head">
       <div class="eyebrow">🍽️ Próximo almuerzo · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos. La fecha se elige a la vez que las propuestas.')}</div>
-      <h2>Fecha por decidir${s.lunch_time ? ` <span class="when">· ${esc(hhmm(s.lunch_time))}</span>` : ''}</h2>
+      <h2>Fecha por decidir</h2>
       <button class="rel-day pick" type="button" data-scroll="#fecha">📅 Elegid fecha en el calendario ↓</button>
       ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
       ${stepper(s.phase)}
@@ -526,7 +525,7 @@ function nextHead(s) {
   return `
     <div class="session-head next-head">
       <div class="eyebrow">🍽️ ${future ? 'Próximo almuerzo' : 'Último almuerzo'} · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos.')}</div>
-      <h2>${esc(longDate(s.lunch_date))}${s.lunch_time ? ` <span class="when">· ${esc(hhmm(s.lunch_time))}</span>` : ''}</h2>
+      <h2>${esc(longDate(s.lunch_date))}</h2>
       <div class="rel-day">${relDay(s.lunch_date)}</div>
       ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
       ${stepper(s.phase)}
@@ -1059,10 +1058,7 @@ function sessionFields(v) {
   return `
     <label class="switch-row"><input type="checkbox" id="f-poll" ${v.poll ? 'checked' : ''}>
       <span class="grow"><strong>📅 Que el grupo elija la fecha</strong><span class="hint">Calendario de sábados y domingos, a la vez que las propuestas</span></span></label>
-    <div class="grid-2">
-      <div class="field" ${v.poll ? 'hidden' : ''} id="f-date-wrap"><label for="f-date">Fecha</label><input class="input" type="date" id="f-date" value="${esc(v.date || '')}"></div>
-      <div class="field"><label for="f-time">Hora <span class="hint">(opc.)</span></label><input class="input" type="time" id="f-time" value="${esc(v.time)}"></div>
-    </div>
+    <div class="field" ${v.poll ? 'hidden' : ''} id="f-date-wrap"><label for="f-date">Fecha</label><input class="input" type="date" id="f-date" value="${esc(v.date || '')}"></div>
     <div class="field"><label for="f-note">Nota <span class="hint">(opcional)</span></label>
       <textarea class="input" id="f-note" maxlength="300" placeholder="Dónde quedamos, quién conduce…">${esc(v.note)}</textarea></div>`;
 }
@@ -1071,7 +1067,7 @@ function editSessionSheet(s) {
   sheet(`
     <h3>Editar almuerzo ${s.number}</h3>
     <form id="edit-form" novalidate>
-      ${sessionFields({ poll: !s.lunch_date, date: s.lunch_date, time: hhmm(s.lunch_time), note: s.note || '' })}
+      ${sessionFields({ poll: !s.lunch_date, date: s.lunch_date, note: s.note || '' })}
       <div class="error-text" id="edit-error"></div>
       <div class="btn-row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary" type="submit">Guardar</button></div>
     </form>`, (root, done) => {
@@ -1083,7 +1079,7 @@ function editSessionSheet(s) {
       if (!pollBox.checked && !date) { root.querySelector('#edit-error').textContent = 'Pon la fecha o deja que la elija el grupo'; return; }
       const { error } = await sb.from('sessions').update({
         lunch_date: date,
-        lunch_time: root.querySelector('#f-time').value || null,
+        lunch_time: null,   // ya no se usa hora
         note: root.querySelector('#f-note').value.trim() || null,
       }).eq('id', s.id);
       if (error) { root.querySelector('#edit-error').textContent = friendlyError(error); return; }
@@ -1099,13 +1095,13 @@ function editSessionSheet(s) {
 function renderNew() {
   const nextNum = (state.sessions[0]?.number || 0) + 1;
   const inAWeek = new Date(Date.now() + 7 * 86400000);
-  const v = (state.drafts.newSession ||= { poll: true, date: isoDate(inAWeek), time: '', note: '' });
+  const v = (state.drafts.newSession ||= { poll: true, date: isoDate(inAWeek), note: '' });
   const busy = activeSession();
   $app.innerHTML = `
     ${topbar(`Nuevo almuerzo ${nextNum}`, '#/admin')}
     <main>
       ${busy ? `<div class="card"><strong>Ya hay un almuerzo en marcha ${info('busy', `Termina el almuerzo ${busy.number} antes de crear otro.`)}</strong></div>` : `
-      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearlo se abre el plazo de propuestas para todo el grupo. Si dejas que el grupo elija la fecha, cada uno marca en un calendario los fines de semana que puede. La fecha, la hora y la nota se pueden editar después.')}</div>
+      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearlo se abre el plazo de propuestas para todo el grupo. Si dejas que el grupo elija la fecha, cada uno marca en un calendario los fines de semana que puede. La fecha y la nota se pueden editar después.')}</div>
       <form class="card" id="new-form" novalidate>
         ${sessionFields(v)}
         <div class="error-text" id="new-error" role="alert"></div>
@@ -1116,14 +1112,14 @@ function renderNew() {
   bindCommon();
   const f = document.getElementById('new-form');
   if (!f) return;
-  ['date', 'time', 'note'].forEach((k) => (f.querySelector(`#f-${k}`).oninput = (e) => (v[k] = e.target.value)));
+  ['date', 'note'].forEach((k) => (f.querySelector(`#f-${k}`).oninput = (e) => (v[k] = e.target.value)));
   f.querySelector('#f-poll').onchange = (e) => { v.poll = e.target.checked; f.querySelector('#f-date-wrap').hidden = v.poll; };
   f.onsubmit = async (e) => {
     e.preventDefault();
     if (!v.poll && !v.date) { document.getElementById('new-error').textContent = 'Pon la fecha o deja que la elija el grupo'; return; }
     const btn = f.querySelector('button[type=submit]');
     btn.disabled = true;
-    const { data, error } = await sb.rpc('create_session', { p_date: v.poll ? null : v.date, p_time: v.time || null, p_note: v.note || null });
+    const { data, error } = await sb.rpc('create_session', { p_date: v.poll ? null : v.date, p_time: null, p_note: v.note || null });
     if (error) { document.getElementById('new-error').textContent = friendlyError(error); btn.disabled = false; return; }
     state.drafts.newSession = null;
     toast(`Almuerzo ${nextNum} creado`);

@@ -940,3 +940,6 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
   .tabbar .tabs.five a { font-size: 10px; }
   .tabbar .tabs.five a svg { width: 22px; height: 22px; }
 }
+
+/* Campo oculto (p. ej. la fecha cuando la elige el grupo) */
+.field[hidden] { display: none; }
