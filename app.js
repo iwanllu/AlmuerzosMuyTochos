@@ -469,9 +469,9 @@ function pending(b) {
 }
 // Participación: cuántos faltan y qué pasa cuando estéis todos
 const PHASE_TEXT = {
-  proposals: { ring: 'han propuesto sitio', did: 'han propuesto', didOne: 'ha propuesto', info: 'Cuando proponga el último, empieza la votación.', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
-  voting: { ring: 'han votado', did: 'han votado', didOne: 'ha votado', info: 'Cuando vote el último, se cierra la votación y el primero del ranking será el sitio del almuerzo.', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
-  rating: { ring: 'han puntuado', did: 'han puntuado', didOne: 'ha puntuado', info: 'Cuando puntúe el último, se desvela quién propuso el sitio y se lleva sus puntos.', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
+  proposals: { ring: 'han propuesto sitio', short: 'propuestas', did: 'han propuesto', didOne: 'ha propuesto', info: 'Cuando proponga el último, empieza la votación.', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
+  voting: { ring: 'han votado', short: 'votos', did: 'han votado', didOne: 'ha votado', info: 'Cuando vote el último, se cierra la votación y el primero del ranking será el sitio del almuerzo.', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
+  rating: { ring: 'han puntuado', short: 'notas', did: 'han puntuado', didOne: 'ha puntuado', info: 'Cuando puntúe el último, se desvela quién propuso el sitio y se lleva sus puntos.', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
 };
 // Franja de participación: va dentro del bloque del sitio del almuerzo
 function partStrip(b) {
@@ -505,18 +505,20 @@ function headRings(b) {
   const p = pending(b);
   const units = [{
     cls: p.missing === 0 ? 'ok' : '', frac: p.total ? p.done / p.total : 0, n: p.done, total: p.total,
-    cap: t.ring, go: '#participacion',
+    cap: t.short, label: `${p.done} de ${p.total} tochos ${t.ring}`, go: '#participacion',
   }];
   const poll = !b.session.lunch_date && b.date_poll;
   if (poll) {
+    // el número cuenta los que faltan; el anillo se llena con los que ya han respondido
     const m = poll.missing.length, tot = b.members || m;
-    units.push({ cls: 'date', frac: tot ? m / tot : 0, n: m, total: tot, cap: 'faltan por proponer fecha', go: '#fecha' });
+    units.push({ cls: 'date', frac: tot ? (tot - m) / tot : 0, n: m, total: tot,
+      cap: 'sin fecha', label: `${m} de ${tot} tochos faltan por proponer fecha`, go: '#fecha' });
   }
   return `
     <div class="nh-rings ${units.length > 1 ? 'two' : ''}">
       ${units.map((u) => `
-        <button type="button" class="part-ring ${u.cls}" data-scroll="${u.go}" aria-label="${u.n} de ${u.total} tochos ${u.cap}. Ver detalle">
-          <span class="pr-dial">${ringSVG(u.frac)}<span class="pr-num"><span class="n">${u.n}<small>/${u.total}</small></span><span class="u">tochos</span></span></span>
+        <button type="button" class="part-ring ${u.cls}" data-scroll="${u.go}" aria-label="${u.label}. Ver detalle">
+          <span class="pr-dial">${ringSVG(u.frac)}<span class="pr-num"><span class="n">${u.n}<small>/${u.total}</small></span></span></span>
           <span class="pr-cap">${u.cap}</span>
         </button>`).join('')}
     </div>`;
@@ -547,8 +549,9 @@ function relDay(d) {
 }
 function nextHead(s, b = null) {
   const ring = b ? headRings(b) : '';
+  const two = ring.includes('nh-rings two');
   if (!s.lunch_date) return `
-    <div class="session-head next-head">
+    <div class="session-head next-head ${two ? 'has-two' : ''}">
       <div class="eyebrow">🍽️ Próximo almuerzo · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos. La fecha se elige a la vez que las propuestas.')}</div>
       <div class="nh-top"><div class="nh-main">
       <h2>Fecha por decidir</h2>
