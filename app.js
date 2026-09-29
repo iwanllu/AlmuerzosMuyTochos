@@ -792,18 +792,6 @@ function rankCol(i, ranked, move) {
     ${move ? `<span class="rank-move ${move.dir}" aria-label="${move.dir === 'up' ? 'sube' : 'baja'}">${move.dir === 'up' ? '▲' : '▼'}</span>` : ''}
   </div>`;
 }
-// Tu propuesta en una sola línea, discreta
-function mineLine(mp, extra = '') {
-  return `
-    <div class="mine-line">
-      <span class="mine-open" ${openAttrs(mp.place_id, mp.name)}>
-        ${thumb(mp.place_id, '🍽️', 'xs')}
-        <span class="body"><span class="nm">${esc(mp.name)}</span><span class="open-hint">Web ↗</span></span>
-      </span>
-      ${extra}
-    </div>`;
-}
-
 function proposalsView(b) {
   const id = b.session.id;
   const d = (state.drafts.proposal[id] ||= { placeId: null, editing: false, adding: false, name: '', note: '' });
@@ -825,13 +813,20 @@ function proposalsView(b) {
           <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
             <span class="name">${esc(p.name)}</span>
             ${placeDesc(p.place_id)}
-            <span class="foot-row"><span class="open-hint">${p.mine ? 'Web ↗' : 'Web y carta ↗'}</span>${p.mine ? '<span class="mine-tag" title="Solo tú lo sabes">tuya</span>' : ''}</span>
+            <span class="foot-row">${p.mine ? `
+              <span class="mine-ctl" title="Solo tú lo sabes">
+                <span class="mine-tag">tu propuesta</span>
+                <span class="mc-btns">
+                  <button type="button" class="mc-btn" id="prop-edit" aria-label="Cambiar tu propuesta">${ICON.edit}</button>
+                  <button type="button" class="mc-btn danger" id="prop-withdraw" aria-label="Retirar tu propuesta">${ICON.x}</button>
+                </span>
+              </span>` : '<span class="open-hint">Web y carta ↗</span>'}</span>
           </div>
         </li>`).join('')}
     </ul>` : '<div class="card empty" style="padding:24px">Aún no hay propuestas. ¡Sé el primero!</div>'}`;
   const form = `
     <form class="card" id="prop-form" novalidate>
-      <span class="field-label">${mp ? 'Cambia tu propuesta' : 'Elige tu propuesta de tu pool'}</span>
+      <span class="field-label">${mp ? 'Elige otro sitio de tu pool' : 'Elige tu propuesta de tu pool'}</span>
       ${pool.length ? `<div class="pick-list" role="radiogroup" aria-label="Sitios de tu pool">
         ${pool.map((p) => `
           <label class="pick ${p.battle_id ? 'disabled' : ''} ${d.placeId === p.id ? 'on' : ''}">
@@ -850,18 +845,11 @@ function proposalsView(b) {
         <button class="btn primary" type="submit" ${d.placeId ? '' : 'disabled'}>${mp ? 'Cambiar propuesta' : 'Proponer este sitio'}</button>
       </div>
     </form>`;
-  const mine = mp ? `
-    <div class="card mine-card">
-      ${mineLine(mp, `<span class="mine-actions">
-        <button class="icon-btn small" id="prop-edit" aria-label="Cambiar propuesta" title="Cambiar">${ICON.edit}</button>
-        <button class="icon-btn small danger" id="prop-withdraw" aria-label="Retirar propuesta" title="Retirar">${ICON.x}</button>
-      </span>`)}
-    </div>` : '';
-
   return `
     ${ranking}
-    <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Elige un sitio de tu pool. Es anónima: solo se sabrá que era tuya si gana, al final. Puedes cambiarla o retirarla mientras dure el plazo.')}</div>
-    ${showForm ? form : mine}
+    ${showForm ? `
+    <div class="section-title" id="tu-propuesta">${mp ? 'Cambia tu propuesta' : 'Tu propuesta'} ${info('tu-propuesta', 'Elige un sitio de tu pool. Es anónima: solo tú verás cuál es la tuya en el ranking, y los demás lo sabrán solo si gana. Puedes cambiarla o retirarla mientras dure el plazo.')}</div>
+    ${form}` : ''}
     ${counter(b)}
     ${datePollView(b)}`;
 }
@@ -885,7 +873,7 @@ function votingView(b) {
         const isVote = voted === p.id;
         let action = '';
         if (isVote) action = '<span class="chip ok">Tu voto</span>';
-        else if (p.mine) action = '<span class="mine-tag">tuya</span>';
+        else if (p.mine) action = '<span class="mine-ctl"><span class="mine-tag">tu propuesta</span></span>';
         else if (!voted) action = `<button class="btn primary small" data-vote="${p.id}" data-name="${esc(p.name)}">Votar</button>`;
         return `
           <li data-flip="p${p.id}" class="place-tile rank-tile ${ranked && i === 0 ? 'lead' : ''} ${ranked && i < 3 ? `podium p${i + 1}` : ''} ${isVote ? 'voted' : ''} ${p.mine ? 'mine' : ''}">
@@ -894,14 +882,13 @@ function votingView(b) {
             <div class="tile-foot" ${openAttrs(p.place_id, p.name)}>
               <span class="name">${esc(p.name)}</span>
               ${placeDesc(p.place_id)}
-              <span class="foot-row"><span class="open-hint">${action ? 'Web ↗' : 'Web y carta ↗'}</span>${action}</span>
+              <span class="foot-row">${p.mine && !isVote ? '' : `<span class="open-hint">${action ? 'Web ↗' : 'Web y carta ↗'}</span>`}${action}</span>
             </div>
           </li>`;
       }).join('')}
     </ul>
-    <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Tu sitio compite de forma anónima. No puedes votarlo: tu voto tiene que ir a otro, y no se puede cambiar.')}</div>
+    <div class="section-title">Tu voto ${info('tu-voto', `${mp ? 'Tu sitio compite de forma anónima y no puedes votarlo. ' : ''}Tienes un voto, secreto y definitivo, para otro sitio del ranking.`)}</div>
     <div class="card mine-card">
-      ${mp ? mineLine(mp) : '<p class="hint" style="margin:0">No propusiste ningún sitio para este almuerzo.</p>'}
       <div class="vote-status ${voted ? 'ok' : ''}">${voted
         ? `✅ Has votado <b>«${esc(votedName)}»</b>`
         : '🗳️ <b>Te falta votar:</b> elige en el ranking de arriba'}</div>
@@ -982,7 +969,7 @@ function closedView(b) {
     ${others.length ? `
       <div class="section-title"><span class="grow">Resto de propuestas ${info('resto', 'Los demás sitios de este almuerzo. Siguen siendo anónimos.')}</span></div>
       <ul class="pool">
-        ${others.map((p) => `<li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>${thumb(p.place_id, '🍽️', 'sm')}<span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">La tuya</span>' : ''}</span><span class="open-hint">Web ↗</span></li>`).join('')}
+        ${others.map((p) => `<li class="pool-item place-card ${p.mine ? 'mine' : ''}" ${openAttrs(p.place_id, p.name)}>${thumb(p.place_id, '🍽️', 'sm')}<span class="body"><span class="name">${esc(p.name)}</span>${p.mine ? '<span class="hint">Tu propuesta</span>' : ''}</span><span class="open-hint">Web ↗</span></li>`).join('')}
       </ul>` : ''}`;
 }
 
@@ -1019,7 +1006,11 @@ function bindSession(b) {
       };
     }
     const edit = document.getElementById('prop-edit');
-    if (edit) edit.onclick = () => { Object.assign(d, { editing: true, placeId: null }); render(); };
+    if (edit) edit.onclick = () => {
+      Object.assign(d, { editing: true, placeId: null });
+      render();
+      document.getElementById('tu-propuesta')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
     const wd = document.getElementById('prop-withdraw');
     if (wd) wd.onclick = async () => {
       if (await confirmSheet({ title: '¿Retirar tu propuesta?', text: 'Podrás proponer otro sitio mientras siga abierto el plazo.', okLabel: 'Retirar', danger: true })) {
