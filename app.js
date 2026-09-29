@@ -623,7 +623,6 @@ function renderSession(id) {
 // Fecha entre todos: calendario de sábados y domingos
 // ---------------------------------------------------------------------------
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const DATE_WINDOW_DAYS = 120;
 const pad2 = (n) => String(n).padStart(2, '0');
 const ymd = (y, m, d) => `${y}-${pad2(m)}-${pad2(d)}`;
 function dateDraft(b) {
@@ -632,34 +631,44 @@ function dateDraft(b) {
   let d = state.drafts.dates[id];
   if (!d || !d.dirty) {
     const sel = {};
-    for (const x of poll.mine) sel[x.day] = x.level;
-    const first = poll.mine[0]?.day || poll.best || isoDate(new Date());
-    d = state.drafts.dates[id] = { sel, none: !!poll.my_none, dirty: false, month: d?.month || first.slice(0, 7) };
+    const today = isoDate(new Date());
+    for (const x of poll.mine) if (x.day >= today && x.day <= poll.max_day) sel[x.day] = x.level;   // fuera de plazo no cuenta
+    // Se abre en el mes de tu primera fecha, de la que va ganando o del próximo fin de semana disponible
+    const t = new Date();
+    while (t.getDay() !== 6 && t.getDay() !== 0) t.setDate(t.getDate() + 1);
+    const nextWeekend = isoDate(t);
+    const first = poll.mine[0]?.day || poll.best || (nextWeekend <= poll.max_day ? nextWeekend : isoDate(new Date()));
+    d = state.drafts.dates[id] = { sel, none: !!poll.my_none, dirty: false, open: !!d?.open, month: d?.month || first.slice(0, 7) };
   }
   return d;
 }
 function calendarHTML(b, d) {
   const poll = b.date_poll;
   const today = isoDate(new Date());
-  const maxDay = isoDate(new Date(Date.now() + DATE_WINDOW_DAYS * 86400000));
+  const maxDay = poll.max_day;                                        // un mes después del último almuerzo
   const [y, m] = d.month.split('-').map(Number);
+  const maxMonth = maxDay.slice(0, 7);
+  const [my, mm] = maxMonth.split('-').map(Number);
+  const lastNav = `${mm + 2 > 12 ? my + 1 : my}-${pad2(((mm + 1) % 12) + 1)}`;   // se puede asomar 2 meses más allá
+  const tooFar = d.month > maxMonth || maxDay < today;
   const startDow = (new Date(y, m - 1, 1).getDay() + 6) % 7;          // lunes = 0
   const days = new Date(y, m, 0).getDate();
   const agg = new Map(poll.days.map((x) => [x.day, x]));
   const members = b.members || 1;
   const canPrev = d.month > today.slice(0, 7);
-  const canNext = d.month < maxDay.slice(0, 7);
+  const canNext = d.month < lastNav;
   let cells = '';
   for (let i = 0; i < startDow; i++) cells += '<span class="cal-blank"></span>';
   for (let day = 1; day <= days; day++) {
     const iso = ymd(y, m, day);
     const dow = (startDow + day - 1) % 7;
     const weekend = dow >= 5;
-    const open = weekend && iso >= today && iso <= maxDay;
+    const late = weekend && iso > maxDay;
+    const open = weekend && iso >= today && !late;
     const g = agg.get(iso);
     const n = g ? g.yes + g.maybe : 0;
     const lvl = d.sel[iso];
-    cells += `<button type="button" class="cal-day ${weekend ? 'we' : ''} ${lvl ? `sel l${lvl}` : ''} ${iso === poll.best ? 'best' : ''}"
+    cells += `<button type="button" class="cal-day ${weekend ? 'we' : ''} ${late ? 'late' : ''} ${lvl ? `sel l${lvl}` : ''} ${iso === poll.best ? 'best' : ''}"
       ${open ? `data-day="${iso}"` : 'disabled'} style="--heat:${(n / members).toFixed(2)}"
       aria-label="${esc(dayLabel(iso))}${n ? `, ${n} ${n === 1 ? 'puede' : 'pueden'}` : ''}${lvl ? ', elegida' : ''}" aria-pressed="${!!lvl}">
       <span>${day}</span>${open && n ? `<i class="cal-n">${n}</i>` : ''}</button>`;
@@ -671,10 +680,12 @@ function calendarHTML(b, d) {
         <strong>${MONTHS_ES[m - 1]} ${y}</strong>
         <button type="button" class="icon-btn small" data-cal="1" ${canNext ? '' : 'disabled'} aria-label="Mes siguiente">›</button>
       </div>
-      <div class="cal-grid">
+      <div class="cal-grid ${tooFar ? 'too-far' : ''}">
         ${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((w, i) => `<span class="cal-dow ${i >= 5 ? 'we' : ''}">${w}</span>`).join('')}
         ${cells}
+        ${tooFar ? '<div class="cal-watermark" role="note"><span>Demasiado tiempo sin volver a almorzar con tus panas</span></div>' : ''}
       </div>
+      <p class="cal-limit">Como mucho hasta el <b>${esc(dayLabel(maxDay))}</b> · un mes después del último almuerzo</p>
     </div>`;
 }
 function datePollView(b) {
@@ -685,26 +696,35 @@ function datePollView(b) {
   const mine = Object.keys(d.sel).sort();
   const ranked = [...poll.days].sort((a, c) => (c.yes + c.maybe) - (a.yes + a.maybe) || c.yes - a.yes || (a.day < c.day ? -1 : 1)).slice(0, 6);
   const missing = poll.missing.map((id) => person(id)).filter(Boolean);
-  const status = d.dirty ? '<span class="chip accent">sin guardar</span>' : poll.answered ? '<span class="chip ok">✓ guardado</span>' : '';
+  const status = !d.dirty && poll.answered ? '<span class="chip ok">✓ guardado</span>' : '';   // si hay cambios, ya sale el botón «Guardar»
   return `
-    <div class="section-title" id="fecha"><span class="grow">📅 ¿Qué día quedamos? ${info('fecha', 'Marca en el calendario los <b>sábados y domingos</b> que puedes y di si es <b>seguro</b> o <b>si hace falta</b>. Cuando hayáis respondido todos, se fija sola la fecha con más gente (empate: más «seguro»; después, la más cercana). El admin puede fijarla antes.')}</span></div>
+    <div class="section-title" id="fecha"><span class="grow">📅 ¿Qué día quedamos? ${info('fecha', 'Marca en el calendario los <b>sábados y domingos</b> que puedes, como mucho <b>un mes después del último almuerzo</b>. Abre «Tus fechas» para decir si cada una es <b>seguro</b> o <b>si hace falta</b>, y guarda. Cuando hayáis respondido todos, se fija sola la fecha con más gente (empate: más «seguro»; después, la más cercana). El admin puede fijarla antes.')}</span></div>
     <div class="card date-card">
       ${calendarHTML(b, d)}
-      <div class="md-head"><strong>Tus fechas</strong>${status}</div>
+      <div class="my-drawer ${d.open ? 'open' : ''}">
+        <div class="md-bar">
+          <button type="button" class="md-toggle" data-mdtoggle aria-expanded="${d.open}" aria-controls="md-body-${b.session.id}">
+            <span class="md-title">${mine.length ? `Tus fechas <b>${mine.length}</b>` : d.none ? 'Ninguna te va bien' : 'Tus fechas'}</span>
+            ${status}
+            <span class="chev" aria-hidden="true">▾</span>
+          </button>
+          ${(mine.length || d.none) && (d.dirty || !poll.answered) ? `<button type="button" class="btn primary small" id="date-save">${poll.answered ? 'Actualizar' : 'Guardar'}</button>` : ''}
+        </div>
+        <div class="md-body" id="md-body-${b.session.id}"><div class="md-inner">
       ${mine.length ? `<div class="my-dates">
         ${mine.map((iso) => `
           <div class="md-row">
             <span class="md-date">${esc(dayLabel(iso))}</span>
-            <span class="seg" role="radiogroup" aria-label="Disponibilidad el ${esc(dayLabel(iso))}">
+            <span class="md-ctrl"><span class="seg" role="radiogroup" aria-label="Disponibilidad el ${esc(dayLabel(iso))}">
               <button type="button" class="${d.sel[iso] === 2 ? 'on' : ''}" data-mday="${iso}" data-level="2" role="radio" aria-checked="${d.sel[iso] === 2}">✅ Seguro</button>
               <button type="button" class="${d.sel[iso] === 1 ? 'on maybe' : ''}" data-mday="${iso}" data-level="1" role="radio" aria-checked="${d.sel[iso] === 1}">🤷 Si hace falta</button>
             </span>
-            <button type="button" class="icon-btn small" data-rmday="${iso}" aria-label="Quitar ${esc(dayLabel(iso))}">${ICON.x}</button>
+            <button type="button" class="icon-btn small" data-rmday="${iso}" aria-label="Quitar ${esc(dayLabel(iso))}">${ICON.x}</button></span>
           </div>`).join('')}
       </div>` : `<p class="md-empty">${d.none ? '😕 Has marcado que ninguna fecha te va bien.' : 'Toca en el calendario los sábados y domingos que puedes.'}</p>`}
       <label class="none-toggle"><input type="checkbox" id="date-none" ${d.none ? 'checked' : ''}> Ninguna fecha me va bien</label>
-      <button type="button" class="btn primary block" id="date-save" ${(mine.length || d.none) && (d.dirty || !poll.answered) ? '' : 'disabled'}>
-        ${poll.answered ? 'Actualizar mis fechas' : 'Guardar mis fechas'}${mine.length ? ` (${mine.length})` : ''}</button>
+        </div></div>
+      </div>
     </div>
     <div class="card avail-card">
       <div class="md-head"><strong>Disponibilidad del grupo</strong></div>
@@ -746,6 +766,12 @@ function bindDatePoll(b) {
   }));
   $app.querySelectorAll('[data-mday]').forEach((btn) => (btn.onclick = () => { d.sel[btn.dataset.mday] = Number(btn.dataset.level); touch(); }));
   $app.querySelectorAll('[data-rmday]').forEach((btn) => (btn.onclick = () => { delete d.sel[btn.dataset.rmday]; touch(); }));
+  const tg = $app.querySelector('[data-mdtoggle]');
+  if (tg) tg.onclick = () => {
+    d.open = !d.open;
+    tg.closest('.my-drawer').classList.toggle('open', d.open);
+    tg.setAttribute('aria-expanded', String(d.open));
+  };
   const none = document.getElementById('date-none');
   if (none) none.onchange = () => { d.none = none.checked; if (d.none) d.sel = {}; touch(); };
   const save = document.getElementById('date-save');
