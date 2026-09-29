@@ -503,7 +503,7 @@ function partRing(b) {
       <span class="pr-dial">
         <svg viewBox="0 0 64 64" aria-hidden="true">
           <circle class="trk" cx="32" cy="32" r="${r}"/>
-          ${len > 0 ? `<circle class="val" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 32 32)"/>` : ''}
+          ${len > 0 ? `<circle class="val" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" transform="translate(64 0) scale(-1 1) rotate(-90 32 32)"/>` : ''}
         </svg>
         <span class="pr-num"><span>${p.done}<small>/${p.total}</small></span></span>
       </span>
