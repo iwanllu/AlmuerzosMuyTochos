@@ -694,7 +694,7 @@ function datePollView(b) {
   const d = dateDraft(b);
   const members = b.members || 1;
   const mine = Object.keys(d.sel).sort();
-  const ranked = [...poll.days].sort((a, c) => (c.yes + c.maybe) - (a.yes + a.maybe) || c.yes - a.yes || (a.day < c.day ? -1 : 1)).slice(0, 6);
+  const byDate = [...poll.days].sort((a, c) => (a.day < c.day ? -1 : a.day > c.day ? 1 : 0));   // orden de calendario
   const missing = poll.missing.map((id) => person(id)).filter(Boolean);
   const status = !d.dirty && poll.answered ? '<span class="chip ok">✓ guardado</span>' : '';   // si hay cambios, ya sale el botón «Guardar»
   return `
@@ -729,7 +729,7 @@ function datePollView(b) {
     <div class="card avail-card">
       <div class="md-head"><strong>Disponibilidad del grupo</strong></div>
       <div class="legend"><span><i class="lg-yes"></i>seguro</span><span><i class="lg-maybe"></i>si hace falta</span><span>· de ${members}</span></div>
-      ${ranked.length ? ranked.map((x) => `
+      ${byDate.length ? byDate.map((x) => `
         <div class="av-row ${x.day === poll.best ? 'best' : ''}">
           <span class="av-date">${x.day === poll.best ? '⭐ ' : ''}${esc(dayLabel(x.day))}</span>
           <span class="av-bar" aria-label="${x.yes} seguro, ${x.maybe} si hace falta, de ${members}">
