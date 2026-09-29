@@ -26,7 +26,7 @@ const state = {
   battles: null,          // mis batallas + contador del grupo (my_battles)
   pushOn: false,
   mapsKey: null,          // clave de navegador de Google Maps (la pone el admin)
-  drafts: { proposal: {}, rating: {}, newSession: null, pool: { name: '', note: '' } },
+  drafts: { proposal: {}, rating: {}, dates: {}, newSession: null, pool: { name: '', note: '' } },
 };
 
 const PHASES = [
@@ -82,8 +82,10 @@ function parseDate(d) {
 }
 const fmtLong = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const fmtShort = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric' });
-const longDate = (d) => { const s = fmtLong.format(parseDate(d)); return s[0].toUpperCase() + s.slice(1); };
-const shortDate = (d) => fmtShort.format(parseDate(d));
+const longDate = (d) => { if (!d) return 'Fecha por decidir'; const s = fmtLong.format(parseDate(d)); return s[0].toUpperCase() + s.slice(1); };
+const shortDate = (d) => (d ? fmtShort.format(parseDate(d)) : 'sin fecha');
+const fmtDay = new Intl.DateTimeFormat('es', { weekday: 'short', day: 'numeric', month: 'short' });
+const dayLabel = (d) => { const s = fmtDay.format(parseDate(d)).replace(',', '').replace(/\.(?=\s|$)/g, ''); return s[0].toUpperCase() + s.slice(1); };
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
 function isoDate(date) {
   const z = (n) => String(n).padStart(2, '0');
@@ -508,6 +510,14 @@ function relDay(d) {
   return n === 0 ? '¡Es hoy!' : n === 1 ? 'Mañana' : n > 1 ? `Dentro de ${n} días` : n === -1 ? 'Fue ayer' : `Fue hace ${-n} días`;
 }
 function nextHead(s) {
+  if (!s.lunch_date) return `
+    <div class="session-head next-head">
+      <div class="eyebrow">🍽️ Próximo almuerzo · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos. La fecha se elige a la vez que las propuestas.')}</div>
+      <h2>Fecha por decidir${s.lunch_time ? ` <span class="when">· ${esc(hhmm(s.lunch_time))}</span>` : ''}</h2>
+      <button class="rel-day pick" type="button" data-scroll="#fecha">📅 Elegid fecha en el calendario ↓</button>
+      ${s.note ? `<p class="note">${linkify(s.note)}</p>` : ''}
+      ${stepper(s.phase)}
+    </div>`;
   const future = daysUntil(s.lunch_date) >= 0;
   return `
     <div class="session-head next-head">
@@ -609,6 +619,150 @@ function renderSession(id) {
   bindSession(b);
 }
 
+// ---------------------------------------------------------------------------
+// Fecha entre todos: calendario de sábados y domingos
+// ---------------------------------------------------------------------------
+const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const DATE_WINDOW_DAYS = 120;
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymd = (y, m, d) => `${y}-${pad2(m)}-${pad2(d)}`;
+function dateDraft(b) {
+  const id = b.session.id;
+  const poll = b.date_poll;
+  let d = state.drafts.dates[id];
+  if (!d || !d.dirty) {
+    const sel = {};
+    for (const x of poll.mine) sel[x.day] = x.level;
+    const first = poll.mine[0]?.day || poll.best || isoDate(new Date());
+    d = state.drafts.dates[id] = { sel, none: !!poll.my_none, dirty: false, month: d?.month || first.slice(0, 7) };
+  }
+  return d;
+}
+function calendarHTML(b, d) {
+  const poll = b.date_poll;
+  const today = isoDate(new Date());
+  const maxDay = isoDate(new Date(Date.now() + DATE_WINDOW_DAYS * 86400000));
+  const [y, m] = d.month.split('-').map(Number);
+  const startDow = (new Date(y, m - 1, 1).getDay() + 6) % 7;          // lunes = 0
+  const days = new Date(y, m, 0).getDate();
+  const agg = new Map(poll.days.map((x) => [x.day, x]));
+  const members = b.members || 1;
+  const canPrev = d.month > today.slice(0, 7);
+  const canNext = d.month < maxDay.slice(0, 7);
+  let cells = '';
+  for (let i = 0; i < startDow; i++) cells += '<span class="cal-blank"></span>';
+  for (let day = 1; day <= days; day++) {
+    const iso = ymd(y, m, day);
+    const dow = (startDow + day - 1) % 7;
+    const weekend = dow >= 5;
+    const open = weekend && iso >= today && iso <= maxDay;
+    const g = agg.get(iso);
+    const n = g ? g.yes + g.maybe : 0;
+    const lvl = d.sel[iso];
+    cells += `<button type="button" class="cal-day ${weekend ? 'we' : ''} ${lvl ? `sel l${lvl}` : ''} ${iso === poll.best ? 'best' : ''}"
+      ${open ? `data-day="${iso}"` : 'disabled'} style="--heat:${(n / members).toFixed(2)}"
+      aria-label="${esc(dayLabel(iso))}${n ? `, ${n} ${n === 1 ? 'puede' : 'pueden'}` : ''}${lvl ? ', elegida' : ''}" aria-pressed="${!!lvl}">
+      <span>${day}</span>${open && n ? `<i class="cal-n">${n}</i>` : ''}</button>`;
+  }
+  return `
+    <div class="cal">
+      <div class="cal-head">
+        <button type="button" class="icon-btn small" data-cal="-1" ${canPrev ? '' : 'disabled'} aria-label="Mes anterior">‹</button>
+        <strong>${MONTHS_ES[m - 1]} ${y}</strong>
+        <button type="button" class="icon-btn small" data-cal="1" ${canNext ? '' : 'disabled'} aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="cal-grid">
+        ${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((w, i) => `<span class="cal-dow ${i >= 5 ? 'we' : ''}">${w}</span>`).join('')}
+        ${cells}
+      </div>
+    </div>`;
+}
+function datePollView(b) {
+  const poll = b.date_poll;
+  if (!poll) return '';
+  const d = dateDraft(b);
+  const members = b.members || 1;
+  const mine = Object.keys(d.sel).sort();
+  const ranked = [...poll.days].sort((a, c) => (c.yes + c.maybe) - (a.yes + a.maybe) || c.yes - a.yes || (a.day < c.day ? -1 : 1)).slice(0, 6);
+  const missing = poll.missing.map((id) => person(id)).filter(Boolean);
+  const status = d.dirty ? '<span class="chip accent">sin guardar</span>' : poll.answered ? '<span class="chip ok">✓ guardado</span>' : '';
+  return `
+    <div class="section-title" id="fecha"><span class="grow">📅 ¿Qué día quedamos? ${info('fecha', 'Marca en el calendario los <b>sábados y domingos</b> que puedes y di si es <b>seguro</b> o <b>si hace falta</b>. Cuando hayáis respondido todos, se fija sola la fecha con más gente (empate: más «seguro»; después, la más cercana). El admin puede fijarla antes.')}</span></div>
+    <div class="card date-card">
+      ${calendarHTML(b, d)}
+      <div class="md-head"><strong>Tus fechas</strong>${status}</div>
+      ${mine.length ? `<div class="my-dates">
+        ${mine.map((iso) => `
+          <div class="md-row">
+            <span class="md-date">${esc(dayLabel(iso))}</span>
+            <span class="seg" role="radiogroup" aria-label="Disponibilidad el ${esc(dayLabel(iso))}">
+              <button type="button" class="${d.sel[iso] === 2 ? 'on' : ''}" data-mday="${iso}" data-level="2" role="radio" aria-checked="${d.sel[iso] === 2}">✅ Seguro</button>
+              <button type="button" class="${d.sel[iso] === 1 ? 'on maybe' : ''}" data-mday="${iso}" data-level="1" role="radio" aria-checked="${d.sel[iso] === 1}">🤷 Si hace falta</button>
+            </span>
+            <button type="button" class="icon-btn small" data-rmday="${iso}" aria-label="Quitar ${esc(dayLabel(iso))}">${ICON.x}</button>
+          </div>`).join('')}
+      </div>` : `<p class="md-empty">${d.none ? '😕 Has marcado que ninguna fecha te va bien.' : 'Toca en el calendario los sábados y domingos que puedes.'}</p>`}
+      <label class="none-toggle"><input type="checkbox" id="date-none" ${d.none ? 'checked' : ''}> Ninguna fecha me va bien</label>
+      <button type="button" class="btn primary block" id="date-save" ${(mine.length || d.none) && (d.dirty || !poll.answered) ? '' : 'disabled'}>
+        ${poll.answered ? 'Actualizar mis fechas' : 'Guardar mis fechas'}${mine.length ? ` (${mine.length})` : ''}</button>
+    </div>
+    <div class="card avail-card">
+      <div class="md-head"><strong>Disponibilidad del grupo</strong></div>
+      <div class="legend"><span><i class="lg-yes"></i>seguro</span><span><i class="lg-maybe"></i>si hace falta</span><span>· de ${members}</span></div>
+      ${ranked.length ? ranked.map((x) => `
+        <div class="av-row ${x.day === poll.best ? 'best' : ''}">
+          <span class="av-date">${x.day === poll.best ? '⭐ ' : ''}${esc(dayLabel(x.day))}</span>
+          <span class="av-bar" aria-label="${x.yes} seguro, ${x.maybe} si hace falta, de ${members}">
+            <i class="yes" style="width:${(x.yes / members) * 100}%"></i><i class="maybe" style="width:${(x.maybe / members) * 100}%"></i></span>
+          <span class="av-n">${x.yes + x.maybe}/${members}</span>
+          ${isAdmin() ? `<button type="button" class="btn ghost small av-fix" data-fixday="${x.day}">Fijar</button>` : ''}
+        </div>`).join('') : '<p class="md-empty">Aún nadie ha elegido fecha.</p>'}
+      ${poll.none_count ? `<p class="md-empty" style="margin-top:6px">${poll.none_count} ${poll.none_count === 1 ? 'persona no puede' : 'personas no pueden'} en ninguna.</p>` : ''}
+      <div class="missing">
+        ${missing.length
+          ? `<span class="ms-label">Faltan por elegir fecha (${missing.length}):</span>
+             <div class="ms-list">${missing.map((p) => `<span class="ms-chip">${avatar(p, 'xs')}${esc(p.display_name)}</span>`).join('')}</div>`
+          : '<span class="ms-label ok">✅ Ya habéis respondido todos</span>'}
+      </div>
+    </div>`;
+}
+function bindDatePoll(b) {
+  const poll = b.date_poll;
+  if (!poll) return;
+  const id = b.session.id;
+  const d = dateDraft(b);
+  const touch = () => { d.dirty = true; render(); };
+  $app.querySelectorAll('[data-cal]').forEach((btn) => (btn.onclick = () => {
+    const [y, m] = d.month.split('-').map(Number);
+    const n = new Date(y, m - 1 + Number(btn.dataset.cal), 1);
+    d.month = `${n.getFullYear()}-${pad2(n.getMonth() + 1)}`;
+    render();
+  }));
+  $app.querySelectorAll('.cal-day[data-day]').forEach((btn) => (btn.onclick = () => {
+    const iso = btn.dataset.day;
+    if (d.sel[iso]) delete d.sel[iso]; else { d.sel[iso] = 2; d.none = false; }
+    if (navigator.vibrate) navigator.vibrate(8);
+    touch();
+  }));
+  $app.querySelectorAll('[data-mday]').forEach((btn) => (btn.onclick = () => { d.sel[btn.dataset.mday] = Number(btn.dataset.level); touch(); }));
+  $app.querySelectorAll('[data-rmday]').forEach((btn) => (btn.onclick = () => { delete d.sel[btn.dataset.rmday]; touch(); }));
+  const none = document.getElementById('date-none');
+  if (none) none.onchange = () => { d.none = none.checked; if (d.none) d.sel = {}; touch(); };
+  const save = document.getElementById('date-save');
+  if (save) save.onclick = async () => {
+    save.disabled = true;
+    const days = Object.keys(d.sel).sort().map((day) => ({ day, level: d.sel[day] }));
+    d.dirty = false;
+    const r = await call('save_dates', { p_session: id, p_days: days, p_none: d.none && !days.length }, 'Fechas guardadas 📅');
+    if (!r.ok) { d.dirty = true; render(); }
+  };
+  $app.querySelectorAll('[data-fixday]').forEach((btn) => (btn.onclick = async () => {
+    const day = btn.dataset.fixday;
+    const ok = await confirmSheet({ title: `¿Fijar el ${dayLabel(day)}?`, text: 'Se cerrará la elección de fecha y avisaremos a todo el grupo.', okLabel: 'Fijar fecha' });
+    if (ok) call('fix_date', { p_session: id, p_day: day }, '📅 Fecha fijada');
+  }));
+}
+
 // Columna de posición del ranking: medallas para el podio, flecha si acaba de subir o bajar
 function rankCol(i, ranked, move) {
   if (!ranked) return '<div class="rank-col" aria-label="Sin posición todavía"><span class="rank-num none">–</span></div>';
@@ -688,6 +842,7 @@ function proposalsView(b) {
     ${ranking}
     <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Elige un sitio de tu pool. Es anónima: solo se sabrá que era tuya si gana, al final. Puedes cambiarla o retirarla mientras dure el plazo.')}</div>
     ${showForm ? form : mine}
+    ${datePollView(b)}
     ${counter(b)}`;
 }
 
@@ -731,6 +886,7 @@ function votingView(b) {
         ? `✅ Has votado <b>«${esc(votedName)}»</b>`
         : '🗳️ <b>Te falta votar:</b> elige en el ranking de arriba'}</div>
     </div>
+    ${datePollView(b)}
     ${counter(b)}`;
 }
 
@@ -770,6 +926,7 @@ function ratingView(b) {
         ${b.my_ratings ? 'Actualizar mi puntuación' : complete ? 'Enviar puntuación' : `Te faltan ${cats.length - vals.length} categorías`}
       </button>
     </form>
+    ${datePollView(b)}
     ${counter(b)}`;
 }
 
@@ -832,6 +989,8 @@ function adminBox(b) {
 function bindSession(b) {
   const id = b.session.id;
   const phase = b.session.phase;
+  bindDatePoll(b);
+  $app.querySelectorAll('[data-scroll]').forEach((el) => (el.onclick = () => document.querySelector(el.dataset.scroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
 
   if (phase === 'proposals') {
     const d = state.drafts.proposal[id];
@@ -920,8 +1079,10 @@ function bindSession(b) {
 
 function sessionFields(v) {
   return `
+    <label class="switch-row"><input type="checkbox" id="f-poll" ${v.poll ? 'checked' : ''}>
+      <span class="grow"><strong>📅 Que el grupo elija la fecha</strong><span class="hint">Calendario de sábados y domingos, a la vez que las propuestas</span></span></label>
     <div class="grid-2">
-      <div class="field"><label for="f-date">Fecha</label><input class="input" type="date" id="f-date" value="${esc(v.date)}" required></div>
+      <div class="field" ${v.poll ? 'hidden' : ''} id="f-date-wrap"><label for="f-date">Fecha</label><input class="input" type="date" id="f-date" value="${esc(v.date || '')}"></div>
       <div class="field"><label for="f-time">Hora <span class="hint">(opc.)</span></label><input class="input" type="time" id="f-time" value="${esc(v.time)}"></div>
     </div>
     <div class="field"><label for="f-note">Nota <span class="hint">(opcional)</span></label>
@@ -932,14 +1093,16 @@ function editSessionSheet(s) {
   sheet(`
     <h3>Editar almuerzo ${s.number}</h3>
     <form id="edit-form" novalidate>
-      ${sessionFields({ date: s.lunch_date, time: hhmm(s.lunch_time), note: s.note || '' })}
+      ${sessionFields({ poll: !s.lunch_date, date: s.lunch_date, time: hhmm(s.lunch_time), note: s.note || '' })}
       <div class="error-text" id="edit-error"></div>
       <div class="btn-row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary" type="submit">Guardar</button></div>
     </form>`, (root, done) => {
+    const pollBox = root.querySelector('#f-poll');
+    pollBox.onchange = () => { root.querySelector('#f-date-wrap').hidden = pollBox.checked; };
     root.querySelector('#edit-form').onsubmit = async (e) => {
       e.preventDefault();
-      const date = root.querySelector('#f-date').value;
-      if (!date) { root.querySelector('#edit-error').textContent = 'Pon la fecha'; return; }
+      const date = pollBox.checked ? null : root.querySelector('#f-date').value;
+      if (!pollBox.checked && !date) { root.querySelector('#edit-error').textContent = 'Pon la fecha o deja que la elija el grupo'; return; }
       const { error } = await sb.from('sessions').update({
         lunch_date: date,
         lunch_time: root.querySelector('#f-time').value || null,
@@ -958,13 +1121,13 @@ function editSessionSheet(s) {
 function renderNew() {
   const nextNum = (state.sessions[0]?.number || 0) + 1;
   const inAWeek = new Date(Date.now() + 7 * 86400000);
-  const v = (state.drafts.newSession ||= { date: isoDate(inAWeek), time: '', note: '' });
+  const v = (state.drafts.newSession ||= { poll: true, date: isoDate(inAWeek), time: '', note: '' });
   const busy = activeSession();
   $app.innerHTML = `
     ${topbar(`Nuevo almuerzo ${nextNum}`, true)}
     <main>
       ${busy ? `<div class="card"><strong>Ya hay un almuerzo en marcha ${info('busy', `Termina el almuerzo ${busy.number} antes de crear otro.`)}</strong></div>` : `
-      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearlo se abre el plazo de propuestas para todo el grupo. La fecha y la nota se pueden editar después.')}</div>
+      <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearlo se abre el plazo de propuestas para todo el grupo. Si dejas que el grupo elija la fecha, cada uno marca en un calendario los fines de semana que puede. La fecha, la hora y la nota se pueden editar después.')}</div>
       <form class="card" id="new-form" novalidate>
         ${sessionFields(v)}
         <div class="error-text" id="new-error" role="alert"></div>
@@ -976,12 +1139,13 @@ function renderNew() {
   const f = document.getElementById('new-form');
   if (!f) return;
   ['date', 'time', 'note'].forEach((k) => (f.querySelector(`#f-${k}`).oninput = (e) => (v[k] = e.target.value)));
+  f.querySelector('#f-poll').onchange = (e) => { v.poll = e.target.checked; f.querySelector('#f-date-wrap').hidden = v.poll; };
   f.onsubmit = async (e) => {
     e.preventDefault();
-    if (!v.date) { document.getElementById('new-error').textContent = 'Pon la fecha'; return; }
+    if (!v.poll && !v.date) { document.getElementById('new-error').textContent = 'Pon la fecha o deja que la elija el grupo'; return; }
     const btn = f.querySelector('button[type=submit]');
     btn.disabled = true;
-    const { data, error } = await sb.rpc('create_session', { p_date: v.date, p_time: v.time || null, p_note: v.note || null });
+    const { data, error } = await sb.rpc('create_session', { p_date: v.poll ? null : v.date, p_time: v.time || null, p_note: v.note || null });
     if (error) { document.getElementById('new-error').textContent = friendlyError(error); btn.disabled = false; return; }
     state.drafts.newSession = null;
     toast(`Almuerzo ${nextNum} creado`);
@@ -1216,6 +1380,7 @@ function updateAppBadge() {
   const act = activeSession();
   const b = act && state.boards.get(act.id);
   if (b && !myStatus(b).done) n++;
+  if (b?.date_poll && !b.date_poll.answered) n++;
   try {
     if (!navigator.setAppBadge) return;
     if (n > 0) navigator.setAppBadge(n).catch(() => {}); else navigator.clearAppBadge().catch(() => {});

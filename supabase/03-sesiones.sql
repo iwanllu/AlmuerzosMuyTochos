@@ -45,7 +45,7 @@ on conflict (key) do nothing;
 create table if not exists public.sessions (
   id                 bigint generated always as identity primary key,
   number             int not null unique,
-  lunch_date         date not null,
+  lunch_date         date,                             -- null = la elige el grupo (07-fechas.sql)
   lunch_time         time,
   note               text check (char_length(note) <= 300),
   phase              text not null default 'proposals'
@@ -187,6 +187,10 @@ begin
     return 'voting';
 
   elsif s.phase = 'voting' then
+    -- Si la fecha sigue sin decidir, se fija ya la que más gente puede
+    if s.lunch_date is null then
+      perform public._fix_date(p_session, public._best_date(p_session));
+    end if;
     -- Ganador: más votos; si hay empate, sorteo entre los empatados
     with counts as (
       select p.id, p.name, count(v.user_id) as n
@@ -322,7 +326,7 @@ returns bigint language plpgsql security definer set search_path = '' as $$
 declare new_id bigint;
 begin
   if not public.is_admin() then raise exception 'Solo el admin puede crear almuerzos'; end if;
-  if p_date is null then raise exception 'Pon la fecha del almuerzo'; end if;
+  if p_date is not null and p_date < current_date then raise exception 'Esa fecha ya ha pasado'; end if;
   if exists (select 1 from public.sessions where phase <> 'closed') then
     raise exception 'Ya hay un almuerzo en marcha. Termínalo antes de crear otro';
   end if;
@@ -331,7 +335,8 @@ begin
           nullif(btrim(coalesce(p_note, '')), ''))
   returning id into new_id;
   perform public._notify_all(format('🍽️ Almuerzo %s', (select number from public.sessions where id = new_id)),
-                             format('Será el %s. ¡Propón tu sitio desde tu pool!', to_char(p_date, 'DD/MM')),
+                             case when p_date is null then 'Proponed sitio y marcad en el calendario qué días podéis.'
+                                  else format('Será el %s. ¡Propón tu sitio desde tu pool!', to_char(p_date, 'DD/MM')) end,
                              format('#/s/%s', new_id), 'session');
   return new_id;
 end $$;
@@ -479,6 +484,7 @@ begin
     'categories', coalesce((select jsonb_agg(jsonb_build_object('key', c.key, 'label', c.label, 'hint', c.hint, 'emoji', c.emoji)
                                              order by c.position)
                             from public.rating_categories c where c.active), '[]'::jsonb),
+    'date_poll', case when s.lunch_date is null and s.phase <> 'closed' then public._date_poll(s.id, uid) end,
     'host_points', lg.host_points,
     'final_revealed', lg.final_revealed,
     'score', case when lg.final_revealed and s.phase = 'closed'

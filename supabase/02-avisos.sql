@@ -78,6 +78,9 @@ begin
        or (s.phase = 'rating' and not exists (select 1 from public.ratings where session_id = s.id and user_id = p_user)) then
       n := n + 1;
     end if;
+    if s.lunch_date is null and not exists (select 1 from public.date_answers where session_id = s.id and user_id = p_user) then
+      n := n + 1;
+    end if;
   end if;
   return n;
 end $$;

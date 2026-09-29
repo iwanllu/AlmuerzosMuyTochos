@@ -8,6 +8,7 @@ Web estática (HTML + JS, sin build) sobre Supabase (proyecto `almuerzos`, Centr
 Un **almuerzo** al mes. Solo el admin crea cada almuerzo (fecha y nota), y cada uno pasa por 4 fases (avanzan solas cuando ha participado todo el grupo; el admin puede forzarlas):
 
 1. **Propuestas** — cada uno propone un sitio (uno por persona). El pool es anónimo.
+   - **📅 Fecha (a la vez):** si el admin deja que la elija el grupo, cada uno marca en un calendario los sábados y domingos que puede («seguro» o «si hace falta», o «ninguna me va bien»). Se ve la disponibilidad de cada fecha y quién falta por responder. Cuando han respondido todos, se fija sola la fecha con más gente (empate: más «seguro»; después, la más cercana). El admin puede fijarla antes.
 2. **Votación** — un voto secreto y definitivo por persona (no a la propia propuesta). La lista se reordena en directo sin mostrar votos; solo se ve cuántos faltan. Empate → sorteo.
 3. **Almuerzo** — se puntúa el sitio ganador por categorías (1–10). Se puede corregir hasta que puntúe todo el grupo.
 4. **Revelación** — se descubre quién lo propuso (anfitrión, +10 puntos de victoria). La nota del sitio queda en secreto.
@@ -70,5 +71,6 @@ Solo se guarda el identificador del sitio; fotos, descripción y web se piden a 
 - `supabase/04-batallas.sql` — pool privado y batallas
 - `supabase/05-google-maps.sql` — clave de Google Maps (la pone el admin)
 - `supabase/06-almuerzos-textos.sql` — textos de avisos y errores con «almuerzo» en vez de «sesión» (ya aplicado)
+- `supabase/07-fechas.sql` — fecha elegida entre todos con calendario de fines de semana (ya aplicado)
 - `supabase/functions/push/index.ts` — función que envía las notificaciones (Web Push sin dependencias; claves derivadas en el servidor, sin service_role)
 - `supabase/opcional-borrar-votaciones-antiguas.sql` — limpia las tablas de la primera versión
