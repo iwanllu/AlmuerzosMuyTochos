@@ -469,9 +469,9 @@ function pending(b) {
 }
 // Participación: cuántos faltan y qué pasa cuando estéis todos
 const PHASE_TEXT = {
-  proposals: { did: 'han propuesto', didOne: 'ha propuesto', info: 'Cuando proponga el último, empieza la votación.', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
-  voting: { did: 'han votado', didOne: 'ha votado', info: 'Cuando vote el último, se cierra la votación y el primero del ranking será el sitio del almuerzo.', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
-  rating: { did: 'han puntuado', didOne: 'ha puntuado', info: 'Cuando puntúe el último, se desvela quién propuso el sitio y se lleva sus puntos.', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
+  proposals: { ring: 'han propuesto sitio', did: 'han propuesto', didOne: 'ha propuesto', info: 'Cuando proponga el último, empieza la votación.', all: '¡Ya habéis propuesto todos!', soon: 'En un momento empieza la votación.' },
+  voting: { ring: 'han votado', did: 'han votado', didOne: 'ha votado', info: 'Cuando vote el último, se cierra la votación y el primero del ranking será el sitio del almuerzo.', all: '¡Ya habéis votado todos!', soon: 'En un momento se anuncia el sitio del almuerzo.' },
+  rating: { ring: 'han puntuado', did: 'han puntuado', didOne: 'ha puntuado', info: 'Cuando puntúe el último, se desvela quién propuso el sitio y se lleva sus puntos.', all: '¡Ya habéis puntuado todos!', soon: 'En un momento se desvela quién lo propuso.' },
 };
 // Franja de participación: va dentro del bloque del sitio del almuerzo
 function partStrip(b) {
@@ -483,32 +483,43 @@ function partStrip(b) {
     <div class="part-strip ${all ? 'ok' : ''}" id="participacion" aria-live="polite">
       <div class="ps-head">
         <span class="ps-label">Participación ${info('participacion', all ? t.soon : `${t.info} Es anónimo: nadie sabe quién falta.`)}</span>
-        <span class="ps-count"><b>${p.done}</b> de ${p.total} ${p.done === 1 ? t.didOne : t.did}</span>
+        <span class="ps-count"><b>${p.done}</b> de ${p.total} tochos ${p.done === 1 ? t.didOne : t.did}</span>
       </div>
       <div class="bar ${all ? 'ok' : ''}"><i style="width:${pct}%"></i></div>
-      <p class="ps-note">${all ? `✓ ${t.all}` : `Faltan ${p.missing} por ${p.verb}`}</p>
+      <p class="ps-note">${all ? `✓ ${t.all}` : p.missing === 1 ? `Falta 1 tocho por ${p.verb}` : `Faltan ${p.missing} tochos por ${p.verb}`}</p>
     </div>`;
 }
-// Anillo pequeño de participación para la cabecera (toca para bajar al detalle)
-function partRing(b) {
+// Anillos de la cabecera: tochos que han propuesto sitio y, mientras no haya fecha, tochos que faltan por proponerla
+function ringSVG(frac) {
+  const r = 25, c = 2 * Math.PI * r;
+  const len = Math.max(0, Math.min(1, frac)) * c;
+  // empieza arriba y se llena en sentido antihorario
+  return `<svg viewBox="0 0 64 64" aria-hidden="true">
+    <circle class="trk" cx="32" cy="32" r="${r}"/>
+    ${len > 0 ? `<circle class="val" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" transform="translate(64 0) scale(-1 1) rotate(-90 32 32)"/>` : ''}
+  </svg>`;
+}
+function headRings(b) {
   const t = PHASE_TEXT[b.session.phase];
   if (!t) return '';
   const p = pending(b);
-  const all = p.missing === 0;
-  const r = 25, c = 2 * Math.PI * r;
-  const len = p.total ? (p.done / p.total) * c : 0;
+  const units = [{
+    cls: p.missing === 0 ? 'ok' : '', frac: p.total ? p.done / p.total : 0, n: p.done, total: p.total,
+    cap: t.ring, go: '#participacion',
+  }];
+  const poll = !b.session.lunch_date && b.date_poll;
+  if (poll) {
+    const m = poll.missing.length, tot = b.members || m;
+    units.push({ cls: 'date', frac: tot ? m / tot : 0, n: m, total: tot, cap: 'faltan por proponer fecha', go: '#fecha' });
+  }
   return `
-    <button type="button" class="part-ring ${all ? 'ok' : ''}" data-scroll="#participacion"
-      aria-label="Participación: ${p.done} de ${p.total} ${p.done === 1 ? t.didOne : t.did}. Ver detalle">
-      <span class="pr-dial">
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <circle class="trk" cx="32" cy="32" r="${r}"/>
-          ${len > 0 ? `<circle class="val" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" transform="translate(64 0) scale(-1 1) rotate(-90 32 32)"/>` : ''}
-        </svg>
-        <span class="pr-num"><span>${p.done}<small>/${p.total}</small></span></span>
-      </span>
-      <span class="pr-cap">${all ? '¡todos!' : t.did}</span>
-    </button>`;
+    <div class="nh-rings ${units.length > 1 ? 'two' : ''}">
+      ${units.map((u) => `
+        <button type="button" class="part-ring ${u.cls}" data-scroll="${u.go}" aria-label="${u.n} de ${u.total} tochos ${u.cap}. Ver detalle">
+          <span class="pr-dial">${ringSVG(u.frac)}<span class="pr-num"><span class="n">${u.n}<small>/${u.total}</small></span><span class="u">tochos</span></span></span>
+          <span class="pr-cap">${u.cap}</span>
+        </button>`).join('')}
+    </div>`;
 }
 function myStatus(b) {
   const s = b.session;
@@ -535,7 +546,7 @@ function relDay(d) {
   return n === 0 ? '¡Es hoy!' : n === 1 ? 'Mañana' : n > 1 ? `Dentro de ${n} días` : n === -1 ? 'Fue ayer' : `Fue hace ${-n} días`;
 }
 function nextHead(s, b = null) {
-  const ring = b ? partRing(b) : '';
+  const ring = b ? headRings(b) : '';
   if (!s.lunch_date) return `
     <div class="session-head next-head">
       <div class="eyebrow">🍽️ Próximo almuerzo · nº ${s.number} ${info('fases', 'Cada almuerzo pasa por 4 fases: <b>propuestas</b>, <b>votación</b>, <b>almuerzo</b> (se puntúa) y <b>revelación</b>. Cada una se cierra sola cuando habéis participado todos. La fecha se elige a la vez que las propuestas.')}</div>

@@ -1019,3 +1019,23 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
   .lunch-block { padding: 14px 5px 10px; }
   .lunch-block .tiles.ranking .place-tile > .carousel { flex-basis: 40%; }
 }
+
+/* Anillos en la cabecera: sitio (naranja) y, hasta que haya fecha, fecha (ámbar, cuenta los que faltan) */
+.nh-rings { flex: none; display: flex; align-items: flex-start; gap: 6px; }
+.nh-rings .pr-dial { width: 64px; height: 64px; }
+.pr-num { flex-direction: column; gap: 2px; }
+.pr-num > span.n { font: 800 17px/1 var(--display); color: var(--text); letter-spacing: -.01em; }
+.pr-num > span.u { font: 600 9px/1 var(--body); color: var(--muted); letter-spacing: .02em; }
+.nh-rings .pr-cap { white-space: normal; width: 84px; font-size: 10.5px; }
+.nh-rings.two .pr-dial { width: 58px; height: 58px; }
+.nh-rings.two .pr-cap { width: 80px; }
+.nh-rings.two .pr-num > span.n { font-size: 16px; }
+.part-ring.date .trk { stroke: var(--gold-soft); }
+.part-ring.date .val { stroke: var(--gold); }
+.next-head .nh-top { align-items: flex-start; }
+.next-head .nh-main { padding-top: 4px; }
+/* Móvil estrecho: con dos anillos, bajan a su propia fila bajo la fecha */
+@media (max-width: 370px) {
+  .next-head .nh-top { flex-wrap: wrap; }
+  .nh-rings.two { width: 100%; gap: 20px; margin-top: 12px; }
+}
