@@ -699,7 +699,18 @@ function calendarHTML(b, d) {
   const canPrev = d.month > today.slice(0, 7);
   const canNext = d.month < lastNav;
   let cells = '';
-  for (let i = 0; i < startDow; i++) cells += '<span class="cal-blank"></span>';
+  // Días del mes anterior y del siguiente para completar las semanas: sombreados y sin tocar
+  const outDay = (date, first) => {
+    const iso = isoDate(date);
+    const isToday = iso === today;
+    return `<span class="cal-day out ${isToday ? 'today' : ''}" aria-hidden="true"><span>${date.getDate()}</span>${
+      isToday ? '<small class="cal-tag">hoy</small>' : first ? `<small class="cal-tag">${MONTHS_ES[date.getMonth()].slice(0, 3).toLowerCase()}</small>` : ''}</span>`;
+  };
+  for (let i = startDow; i > 0; i--) {
+    const date = new Date(y, m - 1, 1 - i);
+    const first = i === startDow || (i === startDow - 1 && isoDate(new Date(y, m - 1, 1 - startDow)) === today);
+    cells += outDay(date, first);
+  }
   for (let day = 1; day <= days; day++) {
     const iso = ymd(y, m, day);
     const dow = (startDow + day - 1) % 7;
@@ -709,11 +720,14 @@ function calendarHTML(b, d) {
     const g = agg.get(iso);
     const n = g ? g.yes + g.maybe : 0;
     const lvl = d.sel[iso];
-    cells += `<button type="button" class="cal-day ${weekend ? 'we' : ''} ${late ? 'late' : ''} ${lvl ? `sel l${lvl}` : ''} ${iso === poll.best ? 'best' : ''}"
-      ${open ? `data-day="${iso}"` : 'disabled'} style="--heat:${(n / members).toFixed(2)}"
-      aria-label="${esc(dayLabel(iso))}${n ? `, ${n} ${n === 1 ? 'puede' : 'pueden'}` : ''}${lvl ? ', elegida' : ''}" aria-pressed="${!!lvl}">
-      <span>${day}</span>${open && n ? `<i class="cal-n">${n}</i>` : ''}</button>`;
+    const isToday = iso === today;
+    cells += `<button type="button" class="cal-day ${weekend ? 'we' : ''} ${late ? 'late' : ''} ${lvl ? `sel l${lvl}` : ''} ${iso === poll.best ? 'best' : ''} ${isToday ? 'today' : ''}"
+      ${open ? `data-day="${iso}"` : 'disabled'} style="--heat:${(n / members).toFixed(2)}" ${isToday ? 'aria-current="date"' : ''}
+      aria-label="${isToday ? 'Hoy, ' : ''}${esc(dayLabel(iso))}${n ? `, ${n} ${n === 1 ? 'puede' : 'pueden'}` : ''}${lvl ? ', elegida' : ''}" aria-pressed="${!!lvl}">
+      <span>${day}</span>${isToday ? '<small class="cal-tag">hoy</small>' : ''}${open && n ? `<i class="cal-n">${n}</i>` : ''}</button>`;
   }
+  const trail = (7 - ((startDow + days) % 7)) % 7;
+  for (let i = 1; i <= trail; i++) cells += outDay(new Date(y, m, i), i === 1);
   return `
     <div class="cal">
       <div class="cal-head">
