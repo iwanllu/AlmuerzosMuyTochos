@@ -53,6 +53,7 @@ const ICON = {
   edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3.2 8.4-7 10-3.8-1.6-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   trophy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></svg>',
 };
 
@@ -316,6 +317,7 @@ function route() {
   if (name === 'pool') return { name: 'pool' };
   if (name === 'perfil') return { name: 'profile' };
   if (name === 'nueva') return { name: 'new' };
+  if (name === 'admin') return { name: 'admin' };
   return { name: 'home' };
 }
 const go = (hash) => { if (location.hash === hash) render(); else location.hash = hash; };
@@ -338,10 +340,11 @@ function topbar(title = '', back = false) {
 function tabbar(active) {
   const t = (key, href, icon, label, badge = 0) => `<a href="${href}" class="${active === key ? 'active' : ''}" ${active === key ? 'aria-current="page"' : ''}>${icon}<span>${label}</span>${badge ? `<span class="tab-badge" aria-label="${badge} pendientes">${badge}</span>` : ''}</a>`;
   return `
-    <nav class="tabbar" aria-label="Secciones"><div class="tabs">
+    <nav class="tabbar" aria-label="Secciones"><div class="tabs ${isAdmin() ? 'five' : ''}">
       ${t('home', '#/', ICON.home, 'Inicio')}
       ${t('pool', '#/pool', ICON.pool, 'Mi pool', myBattleActions())}
       ${t('ranking', '#/clasificacion', ICON.trophy, 'Clasificación')}
+      ${isAdmin() ? t('admin', '#/admin', ICON.admin, 'Admin') : ''}
       ${t('profile', '#/perfil', `<span class="tab-avatar">${avatar(state.me)}</span>`, 'Perfil')}
     </div></nav>`;
 }
@@ -395,6 +398,7 @@ function render() {
   else if (r.name === 'pool') renderPool();
   else if (r.name === 'profile') renderProfile();
   else if (r.name === 'new' && isAdmin()) renderNew();
+  else if (r.name === 'admin' && isAdmin()) renderAdmin();
   else renderHome();
   restoreLayout(layout);
   hydratePlaces();
@@ -567,8 +571,7 @@ function renderHome() {
     </div>
     <div class="card empty">
       <div class="big">🗓️</div>
-      <strong>No hay ningún almuerzo en marcha ${info('sin-sesion', isAdmin() ? 'Créalo cuando tengáis fecha: se abrirá el plazo de propuestas para todo el grupo.' : 'Cuando el admin ponga fecha al próximo, aparecerá aquí.')}</strong>
-      ${isAdmin() ? `<button class="btn primary" data-go="#/nueva">${ICON.plus} Crear almuerzo ${nextNum}</button>` : ''}
+      <strong>No hay ningún almuerzo en marcha ${info('sin-sesion', isAdmin() ? 'Créalo desde la pestaña <b>Admin</b>: se abrirá el plazo de propuestas para todo el grupo.' : 'Cuando el admin cree el próximo, aparecerá aquí.')}</strong>
     </div>`;
 
   $app.innerHTML = `
@@ -578,7 +581,6 @@ function renderHome() {
       ${history(past)}
       ${openB ? `<a class="salseo-line" href="#/pool">⚔️ <span class="grow">${openB === 1 ? 'Hay 1 batalla por jugar' : `Hay ${openB} batallas por jugar`} en el grupo</span><span class="hint">${state.battles.stats.fighters} en liza</span></a>` : ''}
       ${pushCard('home')}
-      ${isAdmin() && b ? adminBox(b) : ''}
     </main>
     ${tabbar('home')}`;
   bindCommon();
@@ -612,7 +614,6 @@ function renderSession(id) {
         ${stepper(b.session.phase)}
       </div>
       ${closedView(b)}
-      ${isAdmin() ? adminBox(b) : ''}
     </main>
     ${tabbar('home')}`;
   bindCommon();
@@ -698,7 +699,7 @@ function datePollView(b) {
   const missing = poll.missing.map((id) => person(id)).filter(Boolean);
   const status = !d.dirty && poll.answered ? '<span class="chip ok">✓ guardado</span>' : '';   // si hay cambios, ya sale el botón «Guardar»
   return `
-    <div class="section-title" id="fecha"><span class="grow">📅 ¿Qué día quedamos? ${info('fecha', 'Marca en el calendario los <b>sábados y domingos</b> que puedes, como mucho <b>un mes después del último almuerzo</b>. Abre «Tus fechas» para decir si cada una es <b>seguro</b> o <b>si hace falta</b>, y guarda. Cuando hayáis respondido todos, se fija sola la fecha con más gente (empate: más «seguro»; después, la más cercana). El admin puede fijarla antes.')}</span></div>
+    <div class="section-title" id="fecha"><span class="grow">📅 ¿Qué día quedamos? ${info('fecha', 'Marca en el calendario los <b>sábados y domingos</b> que puedes, como mucho <b>un mes después del último almuerzo</b>. Abre «Tus fechas» para decir si cada una es <b>seguro</b> o <b>si hace falta</b>, y guarda. Cuando hayáis respondido todos, se fija sola la fecha con más gente (empate: más «seguro»; después, la más cercana).')}</span></div>
     <div class="card date-card">
       ${calendarHTML(b, d)}
       <div class="my-drawer ${d.open ? 'open' : ''}">
@@ -735,7 +736,6 @@ function datePollView(b) {
           <span class="av-bar" aria-label="${x.yes} seguro, ${x.maybe} si hace falta, de ${members}">
             <i class="yes" style="width:${(x.yes / members) * 100}%"></i><i class="maybe" style="width:${(x.maybe / members) * 100}%"></i></span>
           <span class="av-n">${x.yes + x.maybe}/${members}</span>
-          ${isAdmin() ? `<button type="button" class="btn ghost small av-fix" data-fixday="${x.day}">Fijar</button>` : ''}
         </div>`).join('') : '<p class="md-empty">Aún nadie ha elegido fecha.</p>'}
       ${poll.none_count ? `<p class="md-empty" style="margin-top:6px">${poll.none_count} ${poll.none_count === 1 ? 'persona no puede' : 'personas no pueden'} en ninguna.</p>` : ''}
       <div class="missing">
@@ -782,11 +782,6 @@ function bindDatePoll(b) {
     const r = await call('save_dates', { p_session: id, p_days: days, p_none: d.none && !days.length }, 'Fechas guardadas 📅');
     if (!r.ok) { d.dirty = true; render(); }
   };
-  $app.querySelectorAll('[data-fixday]').forEach((btn) => (btn.onclick = async () => {
-    const day = btn.dataset.fixday;
-    const ok = await confirmSheet({ title: `¿Fijar el ${dayLabel(day)}?`, text: 'Se cerrará la elección de fecha y avisaremos a todo el grupo.', okLabel: 'Fijar fecha' });
-    if (ok) call('fix_date', { p_session: id, p_day: day }, '📅 Fecha fijada');
-  }));
 }
 
 // Columna de posición del ranking: medallas para el podio, flecha si acaba de subir o bajar
@@ -868,8 +863,8 @@ function proposalsView(b) {
     ${ranking}
     <div class="section-title">Tu propuesta ${info('tu-propuesta', 'Elige un sitio de tu pool. Es anónima: solo se sabrá que era tuya si gana, al final. Puedes cambiarla o retirarla mientras dure el plazo.')}</div>
     ${showForm ? form : mine}
-    ${datePollView(b)}
-    ${counter(b)}`;
+    ${counter(b)}
+    ${datePollView(b)}`;
 }
 
 function votingView(b) {
@@ -912,8 +907,8 @@ function votingView(b) {
         ? `✅ Has votado <b>«${esc(votedName)}»</b>`
         : '🗳️ <b>Te falta votar:</b> elige en el ranking de arriba'}</div>
     </div>
-    ${datePollView(b)}
-    ${counter(b)}`;
+    ${counter(b)}
+    ${datePollView(b)}`;
 }
 
 function ratingView(b) {
@@ -952,8 +947,8 @@ function ratingView(b) {
         ${b.my_ratings ? 'Actualizar mi puntuación' : complete ? 'Enviar puntuación' : `Te faltan ${cats.length - vals.length} categorías`}
       </button>
     </form>
-    ${datePollView(b)}
-    ${counter(b)}`;
+    ${counter(b)}
+    ${datePollView(b)}`;
 }
 
 function closedView(b) {
@@ -992,25 +987,6 @@ function closedView(b) {
       </ul>` : ''}`;
 }
 
-function adminBox(b) {
-  const s = b.session;
-  const next = {
-    proposals: 'Cerrar propuestas y empezar a votar',
-    voting: 'Cerrar la votación',
-    rating: 'Cerrar puntuación y revelar',
-  }[s.phase];
-  return `
-    <div class="admin-box">
-      <div class="section-title">Admin ${info('admin-sesion', 'Cada fase avanza sola cuando participa todo el grupo. Ciérrala a mano solo si alguien no va a participar. Borrar elimina propuestas, votos y notas.')}</div>
-      <div class="btn-col">
-        ${next ? `<button class="btn ghost" id="adm-next">${next}</button>` : ''}
-        <div class="btn-row">
-          <button class="btn ghost" id="adm-edit">Editar fecha</button>
-          <button class="btn danger" id="adm-del">Borrar</button>
-        </div>
-      </div>
-    </div>`;
-}
 
 function bindSession(b) {
   const id = b.session.id;
@@ -1077,30 +1053,6 @@ function bindSession(b) {
       if (r.ok) state.drafts.rating[id] = null;
     };
   }
-
-  if (isAdmin()) {
-    const nx = document.getElementById('adm-next');
-    if (nx) nx.onclick = async () => {
-      const p = pending(b);
-      const ok = await confirmSheet({
-        title: nx.textContent.trim() + '?',
-        text: p.missing ? `Faltan ${p.missing} por ${p.verb} y ya no podrán hacerlo.` : 'Se pasará a la siguiente fase.',
-        okLabel: 'Sí, avanzar',
-      });
-      if (ok) call('advance_session', { p_session: id }, 'Fase cambiada');
-    };
-    document.getElementById('adm-edit').onclick = () => editSessionSheet(b.session);
-    document.getElementById('adm-del').onclick = async () => {
-      const ok = await confirmSheet({ title: `¿Borrar el almuerzo ${b.session.number}?`, text: 'Se borrarán sus propuestas, votos y puntuaciones. No se puede deshacer.', okLabel: 'Borrar', danger: true });
-      if (!ok) return;
-      const { error } = await sb.from('sessions').delete().eq('id', id);
-      if (error) return toast(friendlyError(error), true);
-      toast('Almuerzo borrado');
-      state.boards.delete(id);
-      await loadAll().catch(() => {});
-      go('#/');
-    };
-  }
 }
 
 function sessionFields(v) {
@@ -1150,7 +1102,7 @@ function renderNew() {
   const v = (state.drafts.newSession ||= { poll: true, date: isoDate(inAWeek), time: '', note: '' });
   const busy = activeSession();
   $app.innerHTML = `
-    ${topbar(`Nuevo almuerzo ${nextNum}`, true)}
+    ${topbar(`Nuevo almuerzo ${nextNum}`, '#/admin')}
     <main>
       ${busy ? `<div class="card"><strong>Ya hay un almuerzo en marcha ${info('busy', `Termina el almuerzo ${busy.number} antes de crear otro.`)}</strong></div>` : `
       <div class="section-title" style="margin-top:4px">Datos del almuerzo ${info('nueva', 'Al crearlo se abre el plazo de propuestas para todo el grupo. Si dejas que el grupo elija la fecha, cada uno marca en un calendario los fines de semana que puede. La fecha, la hora y la nota se pueden editar después.')}</div>
@@ -1160,7 +1112,7 @@ function renderNew() {
         <button class="btn primary block" type="submit">Crear almuerzo ${nextNum}</button>
       </form>`}
     </main>
-    ${tabbar('home')}`;
+    ${tabbar('admin')}`;
   bindCommon();
   const f = document.getElementById('new-form');
   if (!f) return;
@@ -1251,20 +1203,152 @@ function renderRanking() {
     ${topbar('Clasificación')}
     <main>
       ${content}
-      ${isAdmin() ? `
-        <div class="admin-box">
-          <div class="section-title">Admin ${info('admin-final', lg.final_revealed ? 'Vuelve a esconder las notas y la clasificación final.' : `Muestra a todo el grupo las notas de los sitios y quién gana la cena. Se puede volver a ocultar.${lg.closed_count ? '' : ' Hace falta al menos un almuerzo cerrado.'}`)}</div>
-          ${lg.final_revealed
-            ? '<button class="btn ghost block" id="adm-final">Ocultar la gran final</button>'
-            : `<button class="btn primary block" id="adm-final" ${lg.closed_count ? '' : 'disabled'}>🎉 Revelar la gran final</button>`}
-        </div>` : ''}
     </main>
     ${tabbar('ranking')}`;
   bindCommon();
 
+}
+
+// ---------------------------------------------------------------------------
+// Admin: todo lo que solo ve el admin, en su propia pestaña
+// ---------------------------------------------------------------------------
+function renderAdmin() {
+  const act = activeSession();
+  const b = act && state.boards.get(act.id);
+  const lg = state.league;
+  const B = state.battles || { admin: [] };
+  const past = state.sessions.filter((s) => s.phase === 'closed');
+  const nextNum = (state.sessions[0]?.number || 0) + 1;
+
+  let lunch;
+  if (act && b) {
+    const s = b.session;
+    const p = pending(b);
+    const ph = PHASES[phaseIndex(s.phase)];
+    const next = { proposals: 'Pasar a la votación', voting: 'Cerrar la votación', rating: 'Cerrar y revelar notas' }[s.phase];
+    lunch = `
+      <div class="card adm-card">
+        <div class="adm-line"><strong>Almuerzo ${s.number}</strong><span class="chip accent">${ph.emoji} ${ph.label}</span></div>
+        <p class="adm-meta">📅 ${esc(whenText(s))}<br>👥 ${p.missing ? `Faltan ${p.missing} de ${p.total} por ${p.verb}` : `Ya han participado los ${p.total}`}</p>
+        <div class="btn-col">
+          ${next ? `<button class="btn primary block" id="adm-next">${next}</button>` : ''}
+          <div class="btn-row">
+            <button class="btn ghost" id="adm-edit">${ICON.edit} Editar</button>
+            <button class="btn danger" id="adm-del">Borrar</button>
+          </div>
+        </div>
+      </div>`;
+  } else if (act) {
+    lunch = '<div class="card"><div class="splash" style="min-height:100px"><div class="spinner"></div></div></div>';
+  } else {
+    lunch = `
+      <div class="card adm-card">
+        <p class="adm-meta" style="margin-top:0">No hay ningún almuerzo en marcha.</p>
+        <button class="btn primary block" data-go="#/nueva">${ICON.plus} Crear almuerzo ${nextNum}</button>
+      </div>`;
+  }
+
+  const poll = b?.date_poll;
+  const pollBlock = poll ? `
+    <div class="section-title">📅 Fijar la fecha ${info('adm-fecha', 'Se fija sola cuando han respondido todos. Si no queréis esperar, fija tú la que prefieras: se cierra el calendario y avisamos a todo el grupo.')}</div>
+    <div class="card">
+      ${poll.days.length ? [...poll.days].sort((x, y) => (x.day < y.day ? -1 : 1)).map((x) => `
+        <div class="av-row ${x.day === poll.best ? 'best' : ''}">
+          <span class="av-date">${x.day === poll.best ? '⭐ ' : ''}${esc(dayLabel(x.day))}</span>
+          <span class="av-bar"><i class="yes" style="width:${(x.yes / (b.members || 1)) * 100}%"></i><i class="maybe" style="width:${(x.maybe / (b.members || 1)) * 100}%"></i></span>
+          <span class="av-n">${x.yes + x.maybe}/${b.members}</span>
+          <button type="button" class="btn ghost small av-fix" data-fixday="${x.day}">Fijar</button>
+        </div>`).join('') : '<p class="md-empty" style="margin:0">Aún nadie ha elegido fecha.</p>'}
+      <p class="md-empty" style="margin:8px 2px 0">${poll.missing.length ? `Faltan ${poll.missing.length} por responder.` : '✅ Han respondido todos.'}</p>
+    </div>` : '';
+
+  const battles = `
+    <div class="section-title">⚔️ Batallas abiertas ${info('admin-batallas', 'Solo si una batalla se atasca: «Girar ruleta» la gira por quien la provocó y «Resolver ya» decide con lo jugado hasta ahora. Los jugadores son anónimos también para ti.')}</div>
+    <div class="card">
+      ${B.admin?.length ? B.admin.map((a) => `
+        <div class="stand-row">
+          <span class="grow"><span class="name">Batalla #${a.id}</span>
+            <span class="breakdown">${a.players} jugadores · ${a.status === 'spin' ? 'ruleta sin girar' : `${GAMES[a.game]?.name}: han terminado ${a.done}`}</span></span>
+          <button class="btn ghost small" data-force="${a.id}" data-status="${a.status}">${a.status === 'spin' ? 'Girar ruleta' : 'Resolver ya'}</button>
+        </div>`).join('') : '<p class="md-empty" style="margin:0">No hay batallas abiertas.</p>'}
+    </div>`;
+
+  const final = `
+    <div class="section-title">🎉 Gran final ${info('admin-final', lg.final_revealed ? 'Vuelve a esconder las notas y la clasificación final.' : `Muestra a todo el grupo las notas de los sitios y quién gana la cena. Se puede volver a ocultar.${lg.closed_count ? '' : ' Hace falta al menos un almuerzo cerrado.'}`)}</div>
+    <div class="card">
+      ${lg.final_revealed
+        ? '<button class="btn ghost block" id="adm-final">Ocultar la gran final</button>'
+        : `<button class="btn primary block" id="adm-final" ${lg.closed_count ? '' : 'disabled'}>🎉 Revelar la gran final</button>`}
+    </div>`;
+
+  const pastBlock = `
+    <div class="section-title">📚 Almuerzos anteriores</div>
+    ${past.length ? `<div class="card">${past.map((s) => `
+      <div class="stand-row">
+        <span class="grow"><span class="name">Almuerzo ${s.number} · ${esc(s.winner_name || 'sin ganador')}</span>
+          <span class="breakdown">${esc(longDate(s.lunch_date))}</span></span>
+        <button class="icon-btn small" data-edit-past="${s.id}" aria-label="Editar almuerzo ${s.number}">${ICON.edit}</button>
+        <button class="icon-btn small danger" data-del-past="${s.id}" aria-label="Borrar almuerzo ${s.number}">${ICON.x}</button>
+      </div>`).join('')}</div>` : '<div class="card"><p class="md-empty" style="margin:0">Aún no hay almuerzos cerrados.</p></div>'}`;
+
+  $app.innerHTML = `
+    ${topbar('Admin')}
+    <main>
+      <p class="adm-intro">🔒 Solo lo ves tú.</p>
+      <div class="section-title" style="margin-top:6px">🍽️ Almuerzo en marcha ${info('admin-sesion', 'Cada fase avanza sola cuando participa todo el grupo. Ciérrala a mano solo si alguien no va a participar. Borrar elimina propuestas, votos y notas.')}</div>
+      ${lunch}
+      ${pollBlock}
+      ${battles}
+      ${final}
+      ${mapsAdminCard()}
+      ${pastBlock}
+    </main>
+    ${tabbar('admin')}`;
+  bindCommon();
+  bindMapsAdmin();
+
+  const deleteSession = async (s) => {
+    const ok = await confirmSheet({ title: `¿Borrar el almuerzo ${s.number}?`, text: 'Se borrarán sus propuestas, votos y puntuaciones. No se puede deshacer.', okLabel: 'Borrar', danger: true });
+    if (!ok) return;
+    const { error } = await sb.from('sessions').delete().eq('id', s.id);
+    if (error) return toast(friendlyError(error), true);
+    toast('Almuerzo borrado');
+    state.boards.delete(s.id);
+    await loadAll().catch(() => {});
+    render();
+  };
+  if (b) {
+    const id = b.session.id;
+    const nx = document.getElementById('adm-next');
+    if (nx) nx.onclick = async () => {
+      const p = pending(b);
+      const ok = await confirmSheet({
+        title: { proposals: '¿Pasar ya a la votación?', voting: '¿Cerrar ya la votación?', rating: '¿Cerrar la puntuación y revelar las notas?' }[b.session.phase],
+        text: p.missing ? `Faltan ${p.missing} por ${p.verb} y ya no podrán hacerlo.` : 'Se pasará a la siguiente fase.',
+        okLabel: 'Sí, avanzar',
+      });
+      if (ok) call('advance_session', { p_session: id }, 'Fase cambiada');
+    };
+    document.getElementById('adm-edit').onclick = () => editSessionSheet(b.session);
+    document.getElementById('adm-del').onclick = () => deleteSession(b.session);
+    $app.querySelectorAll('[data-fixday]').forEach((btn) => (btn.onclick = async () => {
+      const day = btn.dataset.fixday;
+      const ok = await confirmSheet({ title: `¿Fijar el ${dayLabel(day)}?`, text: 'Se cerrará la elección de fecha y avisaremos a todo el grupo.', okLabel: 'Fijar fecha' });
+      if (ok) call('fix_date', { p_session: id, p_day: day }, '📅 Fecha fijada');
+    }));
+  }
+  $app.querySelectorAll('[data-force]').forEach((btn) => (btn.onclick = async () => {
+    const spin = btn.dataset.status === 'spin';
+    if (await confirmSheet({ title: spin ? '¿Girar la ruleta por el retador?' : '¿Resolver la batalla ya?', text: spin ? 'Se elegirá el minijuego al azar.' : 'Se decidirá con los intentos jugados hasta ahora.', okLabel: 'Sí' })) {
+      call('admin_force_battle', { p_battle: Number(btn.dataset.force) }, 'Hecho');
+    }
+  }));
+  $app.querySelectorAll('[data-edit-past]').forEach((btn) => (btn.onclick = () => editSessionSheet(state.sessions.find((x) => x.id === Number(btn.dataset.editPast)))));
+  $app.querySelectorAll('[data-del-past]').forEach((btn) => (btn.onclick = () => deleteSession(state.sessions.find((x) => x.id === Number(btn.dataset.delPast)))));
   const btn = document.getElementById('adm-final');
+  const lgNow = state.league;
   if (btn) btn.onclick = async () => {
-    const reveal = !lg.final_revealed;
+    const reveal = !lgNow.final_revealed;
     const ok = await confirmSheet(reveal
       ? { title: '¿Revelar la gran final?', text: 'Se mostrarán a todos las notas de los sitios y la clasificación final.', okLabel: 'Revelar' }
       : { title: '¿Ocultar la gran final?', text: 'Las notas volverán a ser secretas.', okLabel: 'Ocultar' });
@@ -1299,7 +1383,6 @@ function renderProfile() {
         </div>
         <button class="btn primary block" type="submit">Guardar</button>
       </form>
-      ${isAdmin() ? mapsAdminCard() : ''}
       <div class="section-title">Avisos en este dispositivo ${info('avisos-disp', 'Se activan en cada móvil por separado. Te avisamos si te retan a una batalla y cuando toque votar o puntuar. Sin teléfono ni email.')}</div>
       ${pushSettings()}
       <div class="section-title">El grupo · ${state.profiles.size}</div>
@@ -1311,7 +1394,6 @@ function renderProfile() {
     ${tabbar('profile')}`;
   bindCommon();
   bindPushCard();
-  bindMapsAdmin();
 
   const file = document.getElementById('file');
   document.getElementById('photo').onclick = () => file.click();
@@ -1416,7 +1498,7 @@ function updateAppBadge() {
 // Buscar en Google Maps y añadir al pool
 async function searchAndAdd() {
   if (!state.mapsKey) {
-    toast(isAdmin() ? 'Primero configura Google Maps en Perfil' : 'Google Maps aún no está configurado: avisa al admin', true);
+    toast(isAdmin() ? 'Primero configura Google Maps en la pestaña Admin' : 'Google Maps aún no está configurado: avisa al admin', true);
     return null;
   }
   const picked = await pickPlace(state.mapsKey);
@@ -1593,16 +1675,6 @@ function renderPool() {
           </li>`).join('')}
       </ul>` : '<div class="card empty" style="margin-top:12px;padding:24px">Tu pool está vacío.</div>'}
       ${done.length ? `<div class="section-title">Batallas terminadas</div><div class="stack-gap">${done.map(battleCard).join('')}</div>` : ''}
-      ${isAdmin() && B.admin?.length ? `
-        <div class="admin-box">
-          <div class="section-title">Admin · batallas abiertas ${info('admin-batallas', 'Solo si una batalla se atasca: «Girar ruleta» la gira por quien la provocó y «Resolver ya» decide con lo jugado hasta ahora. Los jugadores son anónimos también para ti.')}</div>
-          ${B.admin.map((a) => `
-            <div class="stand-row">
-              <span class="grow"><span class="name">Batalla #${a.id} · ${a.players} jugadores</span>
-                <span class="breakdown">${a.status === 'spin' ? 'Ruleta sin girar' : `${GAMES[a.game]?.name} · han terminado ${a.done} de ${a.players}`}</span></span>
-              <button class="btn ghost small" data-force="${a.id}" data-status="${a.status}">${a.status === 'spin' ? 'Girar ruleta' : 'Resolver ya'}</button>
-            </div>`).join('')}
-        </div>` : ''}
       <div class="section-title"><span class="grow">🎮 Minijuegos ${info('minijuegos', 'Deciden las batallas: cuando dos o más queréis el mismo sitio, la ruleta elige uno de estos juegos y quien más puntos saca en 3 intentos se queda el sitio. Aquí los pruebas <b>solo para practicar</b>: no cuenta.')}</span><span class="chip">práctica</span></div>
       <div class="card practice">
         <div class="practice-games">
@@ -1633,12 +1705,6 @@ function renderPool() {
   $app.querySelectorAll('[data-forfeit]').forEach((b) => (b.onclick = async () => {
     if (await confirmSheet({ title: '¿Rendirte?', text: `Saldrás de la batalla y perderás «${b.dataset.name}» de tu pool.`, okLabel: 'Me rindo', danger: true })) {
       call('forfeit_battle', { p_battle: Number(b.dataset.forfeit) }, 'Te has rendido 🏳️');
-    }
-  }));
-  $app.querySelectorAll('[data-force]').forEach((b) => (b.onclick = async () => {
-    const spin = b.dataset.status === 'spin';
-    if (await confirmSheet({ title: spin ? '¿Girar la ruleta por el retador?' : '¿Resolver la batalla ya?', text: spin ? 'Se elegirá el minijuego al azar.' : 'Se decidirá con los intentos jugados hasta ahora.', okLabel: 'Sí' })) {
-      call('admin_force_battle', { p_battle: Number(b.dataset.force) }, 'Hecho');
     }
   }));
 }
@@ -1675,7 +1741,7 @@ function winnerPhoto(b) {
 }
 function mapsNotice() {
   if (state.mapsKey) return '';
-  return `<p class="hint" style="margin:0 0 10px">⚠️ Google Maps aún no está configurado. ${isAdmin() ? 'Configúralo en <b>Perfil</b>.' : 'Avisa al admin.'}</p>`;
+  return `<p class="hint" style="margin:0 0 10px">⚠️ Google Maps aún no está configurado. ${isAdmin() ? 'Configúralo en la pestaña <b>Admin</b>.' : 'Avisa al admin.'}</p>`;
 }
 
 // Rellena las fotos de lo que hay en pantalla y activa los carruseles
@@ -1769,7 +1835,7 @@ onMapsAuthError(() => toast('La clave de Google Maps no es válida o no permite 
 function mapsAdminCard() {
   const on = !!state.mapsKey;
   return `
-    <div class="section-title">Admin · Google Maps ${info('maps', 'Sirve para buscar sitios, ver sus fotos y descripción y abrir su web. Pega una <b>clave de navegador</b> de Google Maps restringida a esta web.')}</div>
+    <div class="section-title">🗺️ Google Maps ${info('maps', 'Sirve para buscar sitios, ver sus fotos y descripción y abrir su web. Pega una <b>clave de navegador</b> de Google Maps restringida a esta web.')}</div>
     <div class="card">
       <strong>${on ? '✅ Google Maps configurado' : '⚠️ Falta la clave de Google Maps'}</strong>
       <div class="field" style="margin:12px 0 10px">

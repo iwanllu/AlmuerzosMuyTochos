@@ -30,7 +30,9 @@ Notificaciones push (Android e iPhone con la web añadida a la pantalla de inici
 
 Las reglas de puntos están en la tabla `league` y las categorías en `rating_categories` (editables desde Supabase → Table Editor).
 
-## Tareas de admin (Supabase → SQL Editor / Authentication)
+## Tareas de admin
+En la web, el admin tiene una **pestaña Admin** abajo (solo la ve él): crear, avanzar, editar o borrar el almuerzo, fijar la fecha, desatascar batallas, revelar la gran final, la clave de Google Maps y los almuerzos anteriores. El resto se hace en Supabase (SQL Editor / Authentication):
+
 | Tarea | Cómo |
 |---|---|
 | Añadir un amigo | Authentication → Users → Add user → Create new user → `nombre@almuerzosmuytochos.app`, contraseña, **Auto Confirm User** marcado |
@@ -39,8 +41,8 @@ Las reglas de puntos están en la tabla `league` y las categorías en `rating_ca
 | Hacer admin a alguien | `supabase/make-admin.sql` |
 | Cambiar categorías de puntuación | Table Editor → `rating_categories` (label, emoji, peso, activa) |
 | Cambiar reglas de puntos | Table Editor → `league` |
-| Clave de Google Maps | Web → Perfil → Admin · Google Maps (ver abajo cómo crearla) |
-| Desatascar una batalla | Web → Mi pool → sección Admin (girar ruleta / resolver ya) |
+| Clave de Google Maps | Web → pestaña Admin → Google Maps (ver abajo cómo crearla) |
+| Desatascar una batalla | Web → pestaña Admin → Batallas abiertas (girar ruleta / resolver ya) |
 | Quitar a un amigo | Authentication → Users → ⋯ → Delete user (se borran también sus votos) |
 
 Los registros públicos están desactivados: solo existen los usuarios que crea el admin.
@@ -50,7 +52,7 @@ Hace falta una **clave de navegador** de Google Maps Platform (requiere cuenta d
 1. [console.cloud.google.com](https://console.cloud.google.com) → proyecto nuevo → activar facturación.
 2. Activar **Maps JavaScript API** y **Places API (New)**.
 3. Credenciales → Crear clave de API → Restringir: *Sitios web* `https://iwanllu.github.io/*` y *APIs* solo las dos anteriores.
-4. En la web: Perfil → Admin · Google Maps → pegar la clave → Guardar.
+4. En la web: pestaña Admin → Google Maps → pegar la clave → Guardar.
 
 Solo se guarda el identificador del sitio; fotos, descripción y web se piden a Google al mostrarlos:
 - **Fotos** (hasta 5 por sitio): la consulta es gratuita; cada foto vista cuenta como *Place Photo* (1.000 gratis/mes).

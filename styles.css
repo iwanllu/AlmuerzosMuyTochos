@@ -920,3 +920,23 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
   .md-inner .md-ctrl .seg { flex: 1; }
   .md-inner .md-ctrl .seg button { flex: 1; }
 }
+
+/* ---------- Pestaña Admin ---------- */
+.adm-intro {
+  display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 4px;
+  padding: 4px 10px; border-radius: 999px; background: var(--surface-2);
+  color: var(--muted); font-size: 12.5px; font-weight: 700;
+}
+.adm-card .adm-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.adm-card .adm-line strong { font-size: 17px; }
+.adm-meta { margin: 8px 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.adm-card .btn-row .btn { min-width: 0; }
+
+/* 5 pestañas (solo el admin): más compactas para que quepan en móviles estrechos */
+/* mismo ancho para todas; solo «Clasificación» se estira lo justo si no le cabe el nombre */
+.tabbar .tabs.five a { flex: 1 1 0; min-width: auto; font-size: 11px; padding: 0 1px; }
+.tabbar .tabs.five a > span:not(.tab-avatar):not(.tab-badge) { white-space: nowrap; }
+@media (max-width: 370px) {
+  .tabbar .tabs.five a { font-size: 10px; }
+  .tabbar .tabs.five a svg { width: 22px; height: 22px; }
+}
