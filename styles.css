@@ -1059,3 +1059,11 @@ body.no-scroll { overflow: hidden; overscroll-behavior: none; }
 .cal-day.today .cal-tag { color: var(--accent); opacity: 1; }
 .cal-day.today.sel.l2 > span, .cal-day.today.sel.l2 .cal-tag { color: #fff; }
 .cal-day.today.sel.l2 { box-shadow: inset 0 0 0 2px #fff, 0 3px 10px rgb(217 72 15 / .35) !important; }
+
+/* Plazo para elegir fecha (admin) */
+.adm-card.adm-warn { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 70%, transparent); }
+.adm-card.adm-warn .adm-meta { color: var(--text); }
+.cal-admin {
+  display: block; margin: 10px auto 0; padding: 8px 12px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--accent-soft); color: var(--accent); font: 700 13px/1.2 var(--body);
+}

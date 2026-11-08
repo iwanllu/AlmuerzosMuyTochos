@@ -31,7 +31,7 @@ Notificaciones push (Android e iPhone con la web añadida a la pantalla de inici
 Las reglas de puntos están en la tabla `league` y las categorías en `rating_categories` (editables desde Supabase → Table Editor).
 
 ## Tareas de admin
-En la web, el admin tiene una **pestaña Admin** abajo (solo la ve él): crear, avanzar, editar o borrar el almuerzo, fijar la fecha, desatascar batallas, revelar la gran final, la clave de Google Maps y los almuerzos anteriores. El resto se hace en Supabase (SQL Editor / Authentication):
+En la web, el admin tiene una **pestaña Admin** abajo (solo la ve él): crear, avanzar, editar o borrar el almuerzo, ampliar el plazo para elegir fecha, fijar la fecha, desatascar batallas, revelar la gran final, la clave de Google Maps y los almuerzos anteriores. El resto se hace en Supabase (SQL Editor / Authentication):
 
 | Tarea | Cómo |
 |---|---|
@@ -75,5 +75,6 @@ Solo se guarda el identificador del sitio; fotos, descripción y web se piden a 
 - `supabase/06-almuerzos-textos.sql` — textos de avisos y errores con «almuerzo» en vez de «sesión» (ya aplicado)
 - `supabase/07-fechas.sql` — fecha elegida entre todos con calendario de fines de semana (ya aplicado)
 - `supabase/08-fechas-limite.sql` — límite de un mes desde el último almuerzo (ya aplicado)
+- `supabase/09-ampliar-plazo-fecha.sql` — el admin puede ampliar (o quitar) meses al plazo para elegir fecha
 - `supabase/functions/push/index.ts` — función que envía las notificaciones (Web Push sin dependencias; claves derivadas en el servidor, sin service_role)
 - `supabase/opcional-borrar-votaciones-antiguas.sql` — limpia las tablas de la primera versión

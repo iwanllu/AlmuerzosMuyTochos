@@ -665,6 +665,21 @@ function renderSession(id) {
 // ---------------------------------------------------------------------------
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const pad2 = (n) => String(n).padStart(2, '0');
+// Suma meses a una fecha ISO como Postgres (31 ene + 1 mes = 28 feb)
+function addMonthsISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(Math.min(d, last))}`;
+}
+// ¿Queda algún sábado o domingo entre hoy y el límite?
+function weekendLeft(maxDay) {
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  for (let i = 0; i < 7; i++, d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) return isoDate(d) <= maxDay;
+  }
+  return false;
+}
 const ymd = (y, m, d) => `${y}-${pad2(m)}-${pad2(d)}`;
 function dateDraft(b) {
   const id = b.session.id;
@@ -740,7 +755,8 @@ function calendarHTML(b, d) {
         ${cells}
         ${tooFar ? '<div class="cal-watermark" role="note"><span>Demasiado tiempo sin volver a almorzar con tus panas</span></div>' : ''}
       </div>
-      <p class="cal-limit">Como mucho hasta el <b>${esc(dayLabel(maxDay))}</b> · un mes después del último almuerzo</p>
+      <p class="cal-limit">Como mucho hasta el <b>${esc(dayLabel(maxDay))}</b> · ${poll.extra_months ? 'plazo ampliado por el admin' : 'un mes después del último almuerzo'}</p>
+      ${isAdmin() && 'extra_months' in poll && !weekendLeft(maxDay) ? '<button type="button" class="cal-admin" data-go="#/admin">🛡️ Amplía el plazo desde la pestaña Admin →</button>' : ''}
     </div>`;
 }
 function datePollView(b) {
@@ -1297,6 +1313,19 @@ function renderAdmin() {
   }
 
   const poll = b?.date_poll;
+  const extra = poll?.extra_months || 0;
+  const plazoBlock = poll && 'extra_months' in poll ? `
+    <div class="section-title">⏳ Plazo para elegir fecha ${info('adm-plazo', 'Por defecto se puede elegir hasta un mes después del último almuerzo. Si se os pasa, amplíalo un mes (puedes repetir) y avisaremos a todo el grupo. Si te pasas, quita lo ampliado.')}</div>
+    <div class="card adm-card ${weekendLeft(poll.max_day) ? '' : 'adm-warn'}">
+      <div class="adm-line"><strong>Hasta el ${esc(dayLabel(poll.max_day))}</strong>${extra ? `<span class="chip accent">+${extra} ${extra === 1 ? 'mes' : 'meses'}</span>` : ''}</div>
+      <p class="adm-meta">${weekendLeft(poll.max_day)
+        ? (extra ? 'Plazo ampliado por ti.' : 'Un mes después del último almuerzo.')
+        : '⚠️ No queda ningún fin de semana dentro del plazo: nadie puede elegir fecha.'}</p>
+      <div class="btn-col">
+        <button class="btn primary block" id="adm-extend">${ICON.plus} Ampliar un mes</button>
+        ${extra ? '<button class="btn ghost block" id="adm-shrink">Quitar un mes</button>' : ''}
+      </div>
+    </div>` : '';
   const pollBlock = poll ? `
     <div class="section-title">📅 Fijar la fecha ${info('adm-fecha', 'Se fija sola cuando han respondido todos. Si no queréis esperar, fija tú la que prefieras: se cierra el calendario y avisamos a todo el grupo.')}</div>
     <div class="card">
@@ -1345,6 +1374,7 @@ function renderAdmin() {
       <p class="adm-intro">🔒 Solo lo ves tú.</p>
       <div class="section-title" style="margin-top:6px">🍽️ Almuerzo en marcha ${info('admin-sesion', 'Cada fase avanza sola cuando participa todo el grupo. Ciérrala a mano solo si alguien no va a participar. Borrar elimina propuestas, votos y notas.')}</div>
       ${lunch}
+      ${plazoBlock}
       ${pollBlock}
       ${battles}
       ${final}
@@ -1379,6 +1409,27 @@ function renderAdmin() {
     };
     document.getElementById('adm-edit').onclick = () => editSessionSheet(b.session);
     document.getElementById('adm-del').onclick = () => deleteSession(b.session);
+    const pl = b.date_poll;
+    const ext = document.getElementById('adm-extend');
+    if (ext) ext.onclick = async () => {
+      const newMax = addMonthsISO(pl.prev_day, 2 + (pl.extra_months || 0));
+      const ok = await confirmSheet({
+        title: '¿Ampliar el plazo un mes?',
+        text: `Se podrá elegir fecha hasta el ${dayLabel(newMax)}. Avisaremos a todo el grupo.`,
+        okLabel: 'Ampliar',
+      });
+      if (ok) call('extend_date_window', { p_session: id, p_months: 1 }, `📅 Plazo ampliado hasta el ${dayLabel(newMax)}`);
+    };
+    const shr = document.getElementById('adm-shrink');
+    if (shr) shr.onclick = async () => {
+      const newMax = addMonthsISO(pl.prev_day, pl.extra_months || 0);
+      const ok = await confirmSheet({
+        title: '¿Quitar un mes de plazo?',
+        text: `El límite volverá al ${dayLabel(newMax)}. Las fechas elegidas después de ese día dejarán de contar.`,
+        okLabel: 'Quitar', danger: true,
+      });
+      if (ok) call('extend_date_window', { p_session: id, p_months: -1 }, `Plazo hasta el ${dayLabel(newMax)}`);
+    };
     $app.querySelectorAll('[data-fixday]').forEach((btn) => (btn.onclick = async () => {
       const day = btn.dataset.fixday;
       const ok = await confirmSheet({ title: `¿Fijar el ${dayLabel(day)}?`, text: 'Se cerrará la elección de fecha y avisaremos a todo el grupo.', okLabel: 'Fijar fecha' });
